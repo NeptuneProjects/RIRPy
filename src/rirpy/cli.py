@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from datetime import timedelta
+from dataclasses import asdict
 import logging
 from pathlib import Path
 import time
 
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 
 from rirpy.config import SimulationConfig
 import rirpy.models as models
@@ -43,38 +42,29 @@ def main():
     logging.debug(config)
 
     # Configure Numba
-    config.configure_numba()
-    
+    # config.configure_numba()
+
     logging.info("Starting Green's function computation...")
     logging.info(f"Calculating for {config.omega_points} frequency points")
-    
+
     # Time the computation
     start_time = time.time()
 
     # Process each requested model
     results = {}
-    
+
     for model_name in config.models:
         logging.info(f"Running model: {model_name}")
-        
+
         # Get the appropriate model function
-        try:
-            model_func = model_factory(model_name)
-        except ValueError as e:
-            logging.error(str(e))
-            continue
-            
-        # Run the computation with Numba acceleration
-        if model_name == "freq":
-            # For frequency domain model
-            g_tank = models.impulse_response_freq_domain(config)
-            results[model_name] = g_tank
+        omega = config.omega
+        model_func = model_factory(model_name)
+        g_tank = model_func(omega=omega, **asdict(config))
+        results[model_name] = g_tank
 
     # Calculate elapsed time
     elapsed_time = time.time() - start_time
-    elapsed_str = str(timedelta(seconds=int(elapsed_time)))
-
-    logging.info(f"Computation completed in {elapsed_str} ({elapsed_time:.2f} seconds)")
+    logging.info(f"Computation completed in {elapsed_time:.2f} seconds.")
     for model_name, result in results.items():
         logging.info(f"[{model_name}] Result shape: {result.shape}")
 
@@ -87,25 +77,20 @@ def main():
 
     # Save results
     logging.info(f"Saving results to {config.output_file}...")
-    
+
     # Save data in NumPy format
     np.save(
         config.output_file,
         {
             "results": results,
             "omega": config.omega,
-            "config": config.to_dict(),
+            "config": asdict(config),
             "computation_time": elapsed_time,
         },
-        allow_pickle=True
+        allow_pickle=True,
     )
 
     logging.info(f"Results successfully saved to {config.output_file}")
-    
-    # Optionally save the configuration to a TOML file
-    config_file = output_path.with_suffix('.toml')
-    config.save_toml(str(config_file))
-    logging.info(f"Configuration saved to {config_file}")
 
 
 if __name__ == "__main__":

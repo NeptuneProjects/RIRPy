@@ -44,25 +44,30 @@ class SimulationConfig:
     fastmath: bool = True  # Use fast math optimizations
     output_file: str = "greens_function_results.npy"
 
+    def __post_init__(self) -> None:
+        """Post-initialization to validate configuration."""
+        self.omega = self._omega  # Generate frequency array
+        self.validate()
+
     @property
-    def omega(self) -> np.ndarray:
+    def _omega(self) -> np.ndarray:
         """Generate the frequency array based on config parameters."""
         return np.linspace(self.omega_start, self.omega_end, self.omega_points)
 
-    def configure_numba(self) -> None:
-        """Configure Numba runtime parameters."""
-        try:
-            import numba
+    # def configure_numba(self) -> None:
+    #     """Configure Numba runtime parameters."""
+    #     try:
+    #         import numba
 
-            if self.num_threads is not None:
-                numba.set_num_threads(self.num_threads)
-                print(f"Numba configured to use {self.num_threads} threads")
-            else:
-                print(f"Numba using {numba.get_num_threads()} threads (default)")
-        except ImportError:
-            print(
-                "Warning: Numba not available. Performance will be severely impacted."
-            )
+    #         if self.num_threads is not None:
+    #             numba.set_num_threads(self.num_threads)
+    #             print(f"Numba configured to use {self.num_threads} threads")
+    #         else:
+    #             print(f"Numba using {numba.get_num_threads()} threads (default)")
+    #     except ImportError:
+    #         print(
+    #             "Warning: Numba not available. Performance will be severely impacted."
+    #         )
 
     @classmethod
     def from_argparse(cls) -> "SimulationConfig":
