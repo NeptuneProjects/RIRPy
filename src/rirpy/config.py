@@ -5,8 +5,10 @@ from dataclasses import dataclass, field
 import tomllib
 from typing import Any
 
-import numpy as np
-from rirpy.models import Models
+# import numpy as np
+import torch
+
+from rirpy.models_np import Models
 
 
 @dataclass
@@ -42,17 +44,17 @@ class SimulationConfig:
     output_file: str = "greens_function_results.pt"
 
     @property
-    def omega(self) -> np.array:
+    def omega(self) -> torch.Tensor:
         """Generate the frequency array based on config parameters."""
-        return np.linspace(self.omega_start, self.omega_end, self.omega_points)
+        return torch.linspace(self.omega_start, self.omega_end, self.omega_points)
 
-    # @property
-    # def device(self) -> torch.device:
-    #     """Determine the appropriate device."""
-    #     if self.use_gpu and torch.backends.mps.is_available():
-    #         return torch.device("mps")
-    #     else:
-    #         return torch.device("cpu")
+    @property
+    def device(self) -> torch.device:
+        """Determine the appropriate device."""
+        if self.use_gpu and torch.backends.mps.is_available():
+            return torch.device("mps")
+        else:
+            return torch.device("cpu")
 
     @classmethod
     def from_argparse(cls) -> "SimulationConfig":
@@ -274,10 +276,10 @@ class SimulationConfig:
         if self.batch_size <= 0:
             raise ValueError("Batch size must be positive")
 
-        # # Check if GPU is requested but not available
-        # if self.use_gpu and not torch.backends.mps.is_available():
-        #     print("Warning: GPU requested but MPS not available. Falling back to CPU.")
-        #     self.use_gpu = False
+        # Check if GPU is requested but not available
+        if self.use_gpu and not torch.backends.mps.is_available():
+            print("Warning: GPU requested but MPS not available. Falling back to CPU.")
+            self.use_gpu = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary."""

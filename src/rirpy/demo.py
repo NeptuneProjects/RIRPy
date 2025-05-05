@@ -10,17 +10,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from rirpy.config import SimulationConfig
-import rirpy.models as models
+import rirpy.models_np as models_np
 
 logger = logging.getLogger(__name__)
 
 MODEL_REGISTRY = {
-    models.Models.FREQUENCY_DOMAIN: models.impulse_response_freq_domain,
+    models_np.Models.FREQUENCY_DOMAIN: models_np.impulse_response_freq_domain,
 }
 
 
 def model_factory(model_name: str) -> callable:
-    model_type = models.Models(model_name)
+    model_type = models_np.Models(model_name)
     if not model_type in MODEL_REGISTRY:
         raise ValueError(f"Model '{model_name}' is not registered or supported.")
     return MODEL_REGISTRY[model_type]
@@ -62,7 +62,7 @@ def main():
     start_time = time.time()
 
     # Run the computation with the optimized function
-    g_tank = models.impulse_response_freq_domain(
+    g_tank = models_np.impulse_response_freq_domain(
         r_source=r_source,
         r_receiver=r_receiver,
         omega=omega,

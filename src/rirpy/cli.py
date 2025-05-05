@@ -8,6 +8,7 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 from rirpy.config import SimulationConfig
 import rirpy.models as models
@@ -42,19 +43,19 @@ def main():
     logging.debug(config)
 
     # Verify device availability
-    # if config.device.type == "mps":
-    #     logging.info("Using Apple Silicon GPU acceleration (MPS)")
-    # else:
-    #     logging.info("Using CPU for computation")
+    if config.device.type == "mps":
+        logging.info("Using Apple Silicon GPU acceleration (MPS)")
+    else:
+        logging.info("Using CPU for computation")
 
     # Prepare tensors for computation
-    # r_source = torch.tensor(config.r_source, dtype=torch.float32, device=config.device)
-    r_source = np.array(config.r_source, dtype=np.float64)
-    # r_receiver = torch.tensor(
-    #     config.r_receiver, dtype=torch.float32, device=config.device
-    # )
-    r_receiver = np.array(config.r_receiver, dtype=np.float64)
-    omega = config.omega
+    r_source = torch.tensor(config.r_source, dtype=torch.float32, device=config.device)
+    # r_source = np.array(config.r_source, dtype=np.float64)
+    r_receiver = torch.tensor(
+        config.r_receiver, dtype=torch.float32, device=config.device
+    )
+    # r_receiver = np.array(config.r_receiver, dtype=np.float64)
+    omega = config.omega.to(config.device)
 
     logging.info("Starting Green's function computation...")
     logging.info(f"Calculating for {len(omega)} frequency points")
@@ -74,7 +75,7 @@ def main():
         beta_surface=config.beta_surface,
         cutoff_time=config.cutoff_time,
         batch_size=config.batch_size,
-        # device=config.device,
+        device=config.device,
     )
 
     # Calculate elapsed time
