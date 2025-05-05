@@ -63,6 +63,7 @@ def propagate_signal(
             cutoff_time,
         )
     )
+    logging.info(f"{len(image_distances):,} reflections computed.")
 
     # Initialize output with same shape as input
     y_receiver = np.zeros_like(source_signal, dtype=np.float64)
