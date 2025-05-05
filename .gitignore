@@ -178,3 +178,8 @@ cython_debug/
 *.pt
 *.npy
 *.npz
+
+# Dev
+src/rirpy/time.py
+src/rirpy/freq.py
+*.m
