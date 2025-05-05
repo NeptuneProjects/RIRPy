@@ -25,28 +25,26 @@ def propagate_signal(
     num_threads: int = 4,
 ) -> npt.NDArray[np.float64]:
     """
-    Function to compute received signal in a tank based on reflection
-    from walls computed in the time domain.
+    Computes the received signal in a tank based on reflections from walls
+    in the time domain.
 
-    Parameters:
-    -----------
-    y_source : ndarray
-        Source time series, can be multiple column vectors [NxM]
-    t : ndarray
-        Time vector (s) [Nx1]
-    c : float
-        Speed of sound (m/s)
-    image_distances : ndarray
-        Array specifying distances of images to be considered (m) [Lx1]
-    image_coefficients : ndarray
-        Array specifying the combined reflection coefficient for each image [Lx1]
+    Args:
+        y_source: Source time series, can be multiple column vectors [NxM].
+        fs: Sampling frequency (Hz).
+        r_source: Vector position of the source (m) [3x1].
+        r_receiver: Vector position of the receiver (m) [3x1].
+        Lx: Length of the tank in the x-dimension (m).
+        Ly: Length of the tank in the y-dimension (m).
+        Lz: Length of the tank in the z-dimension (m).
+        c: Speed of sound (m/s).
+        beta_wall: Reflection coefficient for the 5 non-surface walls of the tank.
+        beta_surface: Reflection coefficient for the water surface.
+        cutoff_time: Time over which to sum reflected paths (s).
+        num_threads: Number of threads for parallel processing. Defaults to 4.
 
     Returns:
-    --------
-    y_receiver : ndarray
-        Signal at the receiver location [NxM]
+        Signal at the receiver location [NxM].
     """
-
     numba.set_num_threads(num_threads)
     logging.info(f"Numba is using {numba.get_num_threads()} threads.")
 
@@ -60,9 +58,6 @@ def propagate_signal(
 
     # Initialize output with same shape as input
     y_receiver = np.zeros_like(y_source, dtype=np.float64)
-
-    # Compute time step
-    # dt = t[1] - t[0]
 
     # Compute time offset for each image
     t_offset = image_distances / c
@@ -129,7 +124,26 @@ def process_block(
     cutoff_distance: float,
     max_diagonal_length: float,
 ) -> tuple[list[float], list[float]]:
-    """Helper function to process one block of the calculation for parallelization"""
+    """
+    Processes one block of the calculation for parallelization.
+
+    Args:
+        l: Current block index in the x-dimension.
+        m_max: Maximum block index in the y-dimension.
+        n_max: Maximum block index in the z-dimension.
+        r_source: Vector position of the source (m) [3x1].
+        r_receiver: Vector position of the receiver (m) [3x1].
+        Lx: Length of the tank in the x-dimension (m).
+        Ly: Length of the tank in the y-dimension (m).
+        Lz: Length of the tank in the z-dimension (m).
+        beta_wall: Reflection coefficient for the 5 non-surface walls of the tank.
+        beta_surface: Reflection coefficient for the water surface.
+        cutoff_distance: Maximum distance to consider for reflections (m).
+        max_diagonal_length: Maximum diagonal length of the tank (m).
+
+    Returns:
+        Distances and reflection coefficients for the block.
+    """
     distances_list = []
     coefficients_list = []
 
@@ -187,31 +201,21 @@ def compute_source_image_distances_and_reflection_coefficients(
     cutoff_time: float,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Calculate the distances and reflection coefficients for source images in a tank.
+    Calculates the distances and reflection coefficients for source images in a tank.
 
-    Parameters:
-    -----------
-    r_source : ndarray
-        Vector position of the source (m) [3x1]
-    r_receiver : ndarray
-        Vector position of the receiver (m) [3x1]
-    Lx, Ly, Lz : float
-        Dimensions of the tank in each coordinate (m)
-    c : float
-        Sound speed (m/s)
-    beta_wall : float
-        Reflection coefficient for the 5 non-surface walls of the tank
-    beta_surface : float
-        Reflection coefficient for the water surface
-    cutoff_time : float
-        Time over which to sum reflected paths (s)
+    Args:
+        r_source: Vector position of the source (m) [3x1].
+        r_receiver: Vector position of the receiver (m) [3x1].
+        Lx: Length of the tank in the x-dimension (m).
+        Ly: Length of the tank in the y-dimension (m).
+        Lz: Length of the tank in the z-dimension (m).
+        c: Speed of sound (m/s).
+        beta_wall: Reflection coefficient for the 5 non-surface walls of the tank.
+        beta_surface: Reflection coefficient for the water surface.
+        cutoff_time: Time over which to sum reflected paths (s).
 
     Returns:
-    --------
-    distances : ndarray
-        Vector containing the apparent distance of each source image from the receiver
-    coefficients : ndarray
-        Vector containing the product of reflection coefficients for each source image
+        Distances and reflection coefficients for source images.
     """
     # Compute limits of sum from cutoff time
     cutoff_distance = cutoff_time * c
@@ -253,11 +257,6 @@ def compute_source_image_distances_and_reflection_coefficients(
     for thread_distances, thread_coefficients in zip(all_distances, all_coefficients):
         distances_unsorted.extend(thread_distances)
         coefficients_unsorted.extend(thread_coefficients)
-
-    # # Convert to numpy arrays
-    # if len(distances_unsorted) == 0:
-    #     # Return empty arrays if no images found
-    #     return np.nan, np.nan
 
     distances_unsorted = np.array(distances_unsorted)
     coefficients_unsorted = np.array(coefficients_unsorted)
