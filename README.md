@@ -15,7 +15,8 @@ To account for the pressure release boundary condition between water and air, th
 In cases where the boundaries consist of a rigid surface, such as the walls of a tank, the reflection coefficient should be set to a positive value.
 For a pressure release boundary conditions, the reflection coefficient should be set to a negative value.
 
-The computation of the images is based on the forumlation presented in Allen, J. B., & Berkley, D. A. (1979). Image method for efficiently simulating small‐room acoustics. The Journal of the Acoustical Society of America, 65(4), 943-950.
+The computation of the images is based on the forumlation presented in Jont B. Allen, David A. Berkley; Image method for efficiently simulating small‐room acoustics. J. Acoust. Soc. Am. 1 April 1979; 65 (4): 943–950. [https://doi.org/10.1121/1.382599](https://doi.org/10.1121/1.382599)
+
 
 ## Installation
 
