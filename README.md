@@ -5,7 +5,8 @@ Scripps Institution of Oceanography
 UC San Diego
 
 This package provides a set of functions for simulating room impulse responses (RIRs) in rectangular spaces using the method of images.
-The package is a direct port of MATLAB code written by [Hayden Johnson](https://github.com/haydenallenjohnson/modelling_tank_wall_reflections), which was originally used for simulating the impulse response inside a tank for underwater acoustics research.
+The package is a direct port of MATLAB code written by [Hayden Johnson](https://github.com/haydenallenjohnson/modelling_tank_wall_reflections), which was originally used for simulating the impulse response inside a tank for underwater acoustics research. Hayden and coauthors discuss the validation of their code in their paper:
+> Shayna Grossman, Hayden Johnson, Dale Stokes, Grant Deane; Toward monitoring submarine glacier melt using hydroacoustics: The role of timescale in the signal of bubble release. J. Acoust. Soc. Am. 1 September 2024; 156 (3): 1820–1838. [https://doi.org/10.1121/10.0028628](https://doi.org/10.1121/10.0028628)
 
 The method of images is used to calculate the various possible reflection paths, and is possible under the assumption that the speed of sound is constant in the medium.
 For non-constant sound speed, ray tracing methods would be more appropriate.
@@ -15,7 +16,8 @@ To account for the pressure release boundary condition between water and air, th
 In cases where the boundaries consist of a rigid surface, such as the walls of a tank, the reflection coefficient should be set to a positive value.
 For a pressure release boundary conditions, the reflection coefficient should be set to a negative value.
 
-The computation of the images is based on the forumlation presented in Jont B. Allen, David A. Berkley; Image method for efficiently simulating small‐room acoustics. J. Acoust. Soc. Am. 1 April 1979; 65 (4): 943–950. [https://doi.org/10.1121/1.382599](https://doi.org/10.1121/1.382599)
+The computation of the images is based on the forumlation presented in:
+>Jont B. Allen, David A. Berkley; Image method for efficiently simulating small‐room acoustics. J. Acoust. Soc. Am. 1 April 1979; 65 (4): 943–950. [https://doi.org/10.1121/1.382599](https://doi.org/10.1121/1.382599)
 
 
 ## Installation
