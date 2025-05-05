@@ -6,7 +6,7 @@ import logging
 import math
 from typing import Tuple, List, Optional
 
-from numba import njit, prange, complex64, float32
+import numba
 import numpy as np
 from tqdm import tqdm
 
@@ -20,7 +20,7 @@ class Models(StrEnum):
     # TIME_DOMAIN_FREE_SPACE = "time_free"
 
 
-@njit(parallel=True, fastmath=True, nopython=True)
+@numba.njit(parallel=True, fastmath=True, nopython=True)
 def compute_image_contributions(
     l_vals: np.ndarray,
     m_vals: np.ndarray, 
@@ -59,7 +59,7 @@ def compute_image_contributions(
                 idx += 1
     
     # Process each valid grid point in parallel
-    for idx in prange(num_valid):
+    for idx in numba.prange(num_valid):
         l, m, n = l_vals[idx], m_vals[idx], n_vals[idx]
         
         # Pre-compute translation vector (done once per grid point)
@@ -165,11 +165,8 @@ def impulse_response_freq_domain(
     g_tank = np.zeros(omega.shape, dtype=np.complex64)
 
     # Set thread count for Numba parallel execution if specified
-    if num_threads is not None:
-        import numba
-
-        numba.set_num_threads(num_threads)
-        print(f"Numba using {numba.get_num_threads()} threads")
+    numba.set_num_threads(num_threads)
+    logging.info(f"Numba is using {numba.get_num_threads()} threads.")
 
     # Calculate total grid points
     n_size = int(2 * n_max + 1)
