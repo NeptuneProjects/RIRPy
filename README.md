@@ -21,7 +21,7 @@ The computation of the images is based on the forumlation presented in Allen, J.
 
 `RIRPy` can be installed using `pip`:
 ```bash
-pip install rirpy
+pip install git+https://github.com/NeptuneProjects/RIRPy.git
 ```
 
 ## Usage
@@ -41,8 +41,8 @@ A demonstration of the package can be found in the `examples` directory.
 
 ## Performance Considerations
 
-The method of images can be computationally expensive, especially for large rooms or many reflections.
-To mitigate this, `Nubma` is used to accelerate computation of the impulse response.
+The method of images can be computationally expensive, depending on the room geometry and number of reflections.
+To mitigate this, just-in-time compilation with `Numba` is used to accelerate computation of the impulse response.
 Parameters that particularly affect computation time include:
 - `cutoff_time`: The maximum time for which reflections are calculated. The longer the cutoff time, the more reflections are calculated, and the longer the computation time.
 - `length_x`, `length_y`, `length_z`: The dimensions of the room. Somewhat counterintuitively, decreasing the room size while keeping `cutoff_time` fixed will take longer to compute due to the increased number of reflections.
