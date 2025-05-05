@@ -68,7 +68,7 @@ def signal_lfm_chirp(
 
 def main():
     print("-" * 60)
-    print("🔊 RIRTorch: Room Impulse Response Modeling")
+    print("🔊RIRPy: Room Impulse Response Modeling")
     print("-" * 60)
 
     sampling_rate = 20000.0  # Sampling rate (Hz)
@@ -91,7 +91,7 @@ def main():
     sound_speed = 343.0  # Speed of sound (m/s)
     refl_coeff_wall = 0.9  # Wall (& floor) reflection coefficient
     refl_coeff_ceil = 0.9  # Ceiling (surface) reflection coefficient
-    cutoff_time = 0.5  # Cutoff time for reflections (s)
+    cutoff_time = 0.2  # Cutoff time for reflections (s)
 
     # The model function can accept multiple signals of the same length.
     y_combined = np.vstack([y_impulse, y_source]).T
