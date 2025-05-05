@@ -12,8 +12,5 @@ license = { file = "LICENSE" }
 authors = [{ name = "William F. Jenkins", email = "wfjenkins@ucsd.edu" }]
 dependencies = ["matplotlib", "numba", "numpy"]
 
-[project.scripts]
-rirpy = "rirpy.run:main"
-
 [tool.setuptools.packages.find]
 where = ["src"]
