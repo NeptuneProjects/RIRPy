@@ -5,6 +5,7 @@ from itertools import product
 import logging
 
 import numpy as np
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +55,10 @@ def impulse_response_freq_domain(
         f"Total grid points to process: {total_grid_points} (l: {2 * l_max + 1}, m: {2 * m_max + 1}, n: {2 * n_max + 1})"
     )
     # Process all grid points in chunks
-    for chunk_start in range(0, total_grid_points, batch_size):
-        logging.info(
-            f"Processing chunk starting at index {chunk_start} of size {batch_size}"
-        )
+    for chunk_start in tqdm(range(0, total_grid_points, batch_size), desc="Processing chunks"):
+        # logging.info(
+        #     f"Processing chunk starting at index {chunk_start} of size {batch_size}"
+        # )
         # Determine l, m, n for this chunk of grid points
         chunk_points = min(batch_size, total_grid_points - chunk_start)
 
