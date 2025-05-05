@@ -11,16 +11,16 @@ logger = logging.getLogger(__name__)
 
 
 def propagate_signal(
-    y_source: npt.NDArray[np.float64],
-    fs: float,
-    r_source: npt.NDArray[np.float64],
-    r_receiver: npt.NDArray[np.float64],
-    Lx: float,
-    Ly: float,
-    Lz: float,
-    c: float,
-    beta_wall: float,
-    beta_surface: float,
+    source_signal: npt.NDArray[np.float64],
+    sampling_rate: float,
+    source_position: npt.NDArray[np.float64],
+    receiver_position: npt.NDArray[np.float64],
+    length_x: float,
+    length_y: float,
+    length_z: float,
+    sound_speed: float,
+    refl_coeff_wall: float,
+    refl_coeff_ceil: float,
     cutoff_time: float,
     num_threads: int = 4,
 ) -> npt.NDArray[np.float64]:
@@ -29,16 +29,16 @@ def propagate_signal(
     in the time domain.
 
     Args:
-        y_source: Source time series, can be multiple column vectors [NxM].
-        fs: Sampling frequency (Hz).
-        r_source: Vector position of the source (m) [3x1].
-        r_receiver: Vector position of the receiver (m) [3x1].
-        Lx: Length of the tank in the x-dimension (m).
-        Ly: Length of the tank in the y-dimension (m).
-        Lz: Length of the tank in the z-dimension (m).
-        c: Speed of sound (m/s).
-        beta_wall: Reflection coefficient for the 5 non-surface walls of the tank.
-        beta_surface: Reflection coefficient for the water surface.
+        source_signal: Source time series, can be multiple column vectors [NxM].
+        sampling_rate: Sampling frequency (Hz).
+        source_position: Vector position of the source (m) [3x1].
+        receiver_position: Vector position of the receiver (m) [3x1].
+        length_x: Length of the tank in the x-dimension (m).
+        length_y: Length of the tank in the y-dimension (m).
+        length_z: Length of the tank in the z-dimension (m).
+        sound_speed: Speed of sound (m/s).
+        refl_coeff_wall: Reflection coefficient for the 5 non-surface walls of the tank.
+        refl_coeff_ceil: Reflection coefficient for the water surface.
         cutoff_time: Time over which to sum reflected paths (s).
         num_threads: Number of threads for parallel processing. Defaults to 4.
 
@@ -48,79 +48,86 @@ def propagate_signal(
     numba.set_num_threads(num_threads)
     logging.info(f"Numba is using {numba.get_num_threads()} threads.")
 
-    dt = 1 / fs
+    dt = 1 / sampling_rate
 
     image_distances, image_coefficients = (
         compute_source_image_distances_and_reflection_coefficients(
-            r_source, r_receiver, Lx, Ly, Lz, c, beta_wall, beta_surface, cutoff_time
+            source_position,
+            receiver_position,
+            length_x,
+            length_y,
+            length_z,
+            sound_speed,
+            refl_coeff_wall,
+            refl_coeff_ceil,
+            cutoff_time,
         )
     )
 
     # Initialize output with same shape as input
-    y_receiver = np.zeros_like(y_source, dtype=np.float64)
+    y_receiver = np.zeros_like(source_signal, dtype=np.float64)
 
     # Compute time offset for each image
-    t_offset = image_distances / c
+    t_offset = image_distances / sound_speed
     t_offset_ind = np.round(t_offset / dt).astype(np.int64)
 
     # Find images that have arrivals within the signal duration
-    num_samples = y_source.shape[0]
+    num_samples = source_signal.shape[0]
 
     # Process each relevant image
     for i in range(len(image_distances)):
         if t_offset_ind[i] >= num_samples:
             break
 
+        # Calculate the shift amount based on the time offset
         shift_amount = t_offset_ind[i]
+        # Apply distance attenuation (assumes cylindrical spreading)
+        coefficients = image_coefficients[i] / image_distances[i]
 
-        if len(y_source.shape) == 1:  # 1D case
-            y_image = np.zeros_like(y_source)
-            if shift_amount > 0:
-                y_image[shift_amount:] = y_source[: num_samples - shift_amount]
-            else:
-                y_image[:] = y_source[:]
-
-            # Apply coefficient and distance attenuation
-            y_image = y_image * (image_coefficients[i] / image_distances[i])
-
-            # Zero out values before the arrival time
-            y_image[:shift_amount] = 0
-
-            # Add to result
-            y_receiver += y_image
-
+        if len(source_signal.shape) == 1:  # 1D case
+            source_subset = (
+                source_signal[: num_samples - shift_amount]
+                if shift_amount > 0
+                else source_signal
+            )
+            y_image = np.zeros_like(source_signal)
+            y_image[shift_amount : shift_amount + len(source_subset)] = source_subset
         else:  # 2D case - multiple columns
-            for col in range(y_source.shape[1]):
-                y_image = np.zeros_like(y_source[:, col])
-                if shift_amount > 0:
-                    y_image[shift_amount:] = y_source[: num_samples - shift_amount, col]
-                else:
-                    y_image[:] = y_source[:, col]
+            y_image = np.zeros_like(source_signal)
+            for col in range(source_signal.shape[1]):
+                source_subset = (
+                    source_signal[: num_samples - shift_amount, col]
+                    if shift_amount > 0
+                    else source_signal[:, col]
+                )
+                y_image[shift_amount : shift_amount + len(source_subset), col] = (
+                    source_subset
+                )
 
-                # Apply coefficient and distance attenuation
-                y_image = y_image * (image_coefficients[i] / image_distances[i])
+        # Apply coefficient and distance attenuation
+        y_image *= coefficients
 
-                # Zero out values before the arrival time
-                y_image[:shift_amount] = 0
+        # Zero out values before the arrival time
+        y_image[:shift_amount] = 0
 
-                # Add to result
-                y_receiver[:, col] += y_image
+        # Add to result
+        y_receiver += y_image
 
     return y_receiver
 
 
 @numba.njit
 def process_block(
-    l: int,
-    m_max: int,
-    n_max: int,
-    r_source: npt.NDArray[np.float64],
-    r_receiver: npt.NDArray[np.float64],
-    Lx: float,
-    Ly: float,
-    Lz: float,
-    beta_wall: float,
-    beta_surface: float,
+    i_current: int,
+    j_max: int,
+    k_max: int,
+    source_position: npt.NDArray[np.float64],
+    receiver_position: npt.NDArray[np.float64],
+    length_x: float,
+    length_y: float,
+    length_z: float,
+    refl_coeff_wall: float,
+    refl_coeff_ceil: float,
     cutoff_distance: float,
     max_diagonal_length: float,
 ) -> tuple[list[float], list[float]]:
@@ -128,16 +135,16 @@ def process_block(
     Processes one block of the calculation for parallelization.
 
     Args:
-        l: Current block index in the x-dimension.
-        m_max: Maximum block index in the y-dimension.
-        n_max: Maximum block index in the z-dimension.
-        r_source: Vector position of the source (m) [3x1].
-        r_receiver: Vector position of the receiver (m) [3x1].
-        Lx: Length of the tank in the x-dimension (m).
-        Ly: Length of the tank in the y-dimension (m).
-        Lz: Length of the tank in the z-dimension (m).
-        beta_wall: Reflection coefficient for the 5 non-surface walls of the tank.
-        beta_surface: Reflection coefficient for the water surface.
+        i_current: Current block index in the x-dimension.
+        j_max: Maximum block index in the y-dimension.
+        k_max: Maximum block index in the z-dimension.
+        source_position: Vector position of the source (m) [3x1].
+        receiver_position: Vector position of the receiver (m) [3x1].
+        length_x: Length of the tank in the x-dimension (m).
+        length_y: Length of the tank in the y-dimension (m).
+        length_z: Length of the tank in the z-dimension (m).
+        refl_coeff_wall: Reflection coefficient for the 5 non-surface walls of the tank.
+        refl_coeff_ceil: Reflection coefficient for the water surface.
         cutoff_distance: Maximum distance to consider for reflections (m).
         max_diagonal_length: Maximum diagonal length of the tank (m).
 
@@ -147,10 +154,12 @@ def process_block(
     distances_list = []
     coefficients_list = []
 
-    for m in range(-m_max, m_max + 1):
-        for n in range(-n_max, n_max + 1):
+    for j in range(-j_max, j_max + 1):
+        for k in range(-k_max, k_max + 1):
             # Compute lattice displacement vector
-            r_translation = np.array([2.0 * l * Lx, 2.0 * m * Ly, 2.0 * n * Lz])
+            r_translation = np.array(
+                [2.0 * i_current * length_x, 2.0 * j * length_y, 2.0 * k * length_z]
+            )
 
             if (
                 np.sqrt(np.sum(r_translation**2)) - 2 * max_diagonal_length
@@ -164,23 +173,23 @@ def process_block(
                             image_factors = np.array(
                                 [1.0 - 2.0 * i, 1.0 - 2.0 * j, 1.0 - 2.0 * k]
                             )
-                            r_image = r_translation + image_factors * r_source
+                            r_image = r_translation + image_factors * source_position
 
                             # Compute distance
-                            R = r_image - r_receiver
+                            R = r_image - receiver_position
                             distance = np.sqrt(np.sum(R**2))
 
                             # Compute reflection coefficient product
                             b = (
-                                beta_wall
+                                refl_coeff_wall
                                 ** (
-                                    abs(l - i)
-                                    + abs(l)
-                                    + abs(m - j)
-                                    + abs(m)
-                                    + abs(n - k)
+                                    abs(i_current - i)
+                                    + abs(i_current)
+                                    + abs(j - j)
+                                    + abs(j)
+                                    + abs(k - k)
                                 )
-                            ) * (beta_surface ** abs(n))
+                            ) * (refl_coeff_ceil ** abs(k))
 
                             distances_list.append(distance)
                             coefficients_list.append(b)
@@ -188,41 +197,41 @@ def process_block(
     return distances_list, coefficients_list
 
 
-@numba.njit(parallel=True, fastmath=True)
+@numba.njit(parallel=True)
 def compute_source_image_distances_and_reflection_coefficients(
-    r_source: npt.NDArray[np.float64],
-    r_receiver: npt.NDArray[np.float64],
-    Lx: float,
-    Ly: float,
-    Lz: float,
-    c: float,
-    beta_wall: float,
-    beta_surface: float,
+    source_location: npt.NDArray[np.float64],
+    receiver_location: npt.NDArray[np.float64],
+    length_x: float,
+    length_y: float,
+    length_z: float,
+    sound_speed: float,
+    refl_coeff_wall: float,
+    refl_coeff_ceil: float,
     cutoff_time: float,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """
     Calculates the distances and reflection coefficients for source images in a tank.
 
     Args:
-        r_source: Vector position of the source (m) [3x1].
-        r_receiver: Vector position of the receiver (m) [3x1].
-        Lx: Length of the tank in the x-dimension (m).
-        Ly: Length of the tank in the y-dimension (m).
-        Lz: Length of the tank in the z-dimension (m).
-        c: Speed of sound (m/s).
-        beta_wall: Reflection coefficient for the 5 non-surface walls of the tank.
-        beta_surface: Reflection coefficient for the water surface.
+        source_location: Vector position of the source (m) [3x1].
+        receiver_location: Vector position of the receiver (m) [3x1].
+        length_x: Length of the tank in the x-dimension (m).
+        length_y: Length of the tank in the y-dimension (m).
+        length_z: Length of the tank in the z-dimension (m).
+        sound_speed: Speed of sound (m/s).
+        refl_coeff_wall: Reflection coefficient for the 5 non-surface walls of the tank.
+        refl_coeff_ceil: Reflection coefficient for the water surface.
         cutoff_time: Time over which to sum reflected paths (s).
 
     Returns:
         Distances and reflection coefficients for source images.
     """
     # Compute limits of sum from cutoff time
-    cutoff_distance = cutoff_time * c
-    l_max = math.ceil(cutoff_distance / (Lx * 2))
-    m_max = math.ceil(cutoff_distance / (Ly * 2))
-    n_max = math.ceil(cutoff_distance / (Lz * 2))
-    max_diagonal_length = np.sqrt(Lx**2 + Ly**2 + Lz**2)
+    cutoff_distance = cutoff_time * sound_speed
+    i_max = math.ceil(cutoff_distance / (length_x * 2))
+    j_max = math.ceil(cutoff_distance / (length_y * 2))
+    k_max = math.ceil(cutoff_distance / (length_z * 2))
+    max_diagonal_length = np.sqrt(length_x**2 + length_y**2 + length_z**2)
 
     # Since we can't dynamically grow arrays in parallel regions with Numba,
     # we'll collect results from each parallel task and combine them later
@@ -230,18 +239,18 @@ def compute_source_image_distances_and_reflection_coefficients(
     all_coefficients = []
 
     # Process blocks in parallel
-    for l in numba.prange(-l_max, l_max + 1):
+    for l in numba.prange(-i_max, i_max + 1):
         distances_local, coefficients_local = process_block(
             l,
-            m_max,
-            n_max,
-            r_source,
-            r_receiver,
-            Lx,
-            Ly,
-            Lz,
-            beta_wall,
-            beta_surface,
+            j_max,
+            k_max,
+            source_location,
+            receiver_location,
+            length_x,
+            length_y,
+            length_z,
+            refl_coeff_wall,
+            refl_coeff_ceil,
             cutoff_distance,
             max_diagonal_length,
         )
