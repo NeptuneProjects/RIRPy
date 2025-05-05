@@ -28,9 +28,9 @@ def model_factory(model_name: str) -> callable:
 
 
 def main():
-    """Main entry point for the rirtorch command-line interface."""
+    """Main entry point for the rirpy command-line interface."""
     print("-" * 60)
-    print("🔊 RIRTorch: Room Impulse Response Modeling with Python")
+    print("🔊 RIRPy: Room Impulse Response Modeling with Python (Numba-accelerated)")
     print("-" * 60)
 
     # Load configuration (either from command line or TOML file)
@@ -42,48 +42,41 @@ def main():
     # Print configuration summary
     logging.debug(config)
 
-    # Verify device availability
-    if config.device.type == "mps":
-        logging.info("Using Apple Silicon GPU acceleration (MPS)")
-    else:
-        logging.info("Using CPU for computation")
-
-    # Prepare tensors for computation
-    r_source = torch.tensor(config.r_source, dtype=torch.float32, device=config.device)
-    # r_source = np.array(config.r_source, dtype=np.float64)
-    r_receiver = torch.tensor(
-        config.r_receiver, dtype=torch.float32, device=config.device
-    )
-    # r_receiver = np.array(config.r_receiver, dtype=np.float64)
-    omega = config.omega.to(config.device)
-
+    # Configure Numba
+    config.configure_numba()
+    
     logging.info("Starting Green's function computation...")
-    logging.info(f"Calculating for {len(omega)} frequency points")
+    logging.info(f"Calculating for {config.omega_points} frequency points")
+    
     # Time the computation
     start_time = time.time()
 
-    # Run the computation with the optimized function
-    g_tank = models.impulse_response_freq_domain(
-        r_source=r_source,
-        r_receiver=r_receiver,
-        omega=omega,
-        Lx=config.Lx,
-        Ly=config.Ly,
-        Lz=config.Lz,
-        c=config.sound_speed,
-        beta_wall=config.beta_wall,
-        beta_surface=config.beta_surface,
-        cutoff_time=config.cutoff_time,
-        batch_size=config.batch_size,
-        device=config.device,
-    )
+    # Process each requested model
+    results = {}
+    
+    for model_name in config.models:
+        logging.info(f"Running model: {model_name}")
+        
+        # Get the appropriate model function
+        try:
+            model_func = model_factory(model_name)
+        except ValueError as e:
+            logging.error(str(e))
+            continue
+            
+        # Run the computation with Numba acceleration
+        if model_name == "freq":
+            # For frequency domain model
+            g_tank = models.impulse_response_freq_domain(config)
+            results[model_name] = g_tank
 
     # Calculate elapsed time
     elapsed_time = time.time() - start_time
     elapsed_str = str(timedelta(seconds=int(elapsed_time)))
 
     logging.info(f"Computation completed in {elapsed_str} ({elapsed_time:.2f} seconds)")
-    logging.info(f"Green's function shape: {g_tank.shape}")
+    for model_name, result in results.items():
+        logging.info(f"[{model_name}] Result shape: {result.shape}")
 
     # Create output directory if needed
     output_path = Path(config.output_file)
@@ -94,22 +87,25 @@ def main():
 
     # Save results
     logging.info(f"Saving results to {config.output_file}...")
-
-    # Move tensor to CPU for saving
-    # g_tank_cpu = g_tank.cpu()
-
-    # # Save both the Green's function and the configuration parameters
-    # torch.save(
-    #     {
-    #         "g_tank": g_tank_cpu,
-    #         "omega": omega.cpu(),
-    #         "config": config.to_dict(),
-    #         "computation_time": elapsed_time,
-    #     },
-    #     config.output_file,
-    # )
+    
+    # Save data in NumPy format
+    np.save(
+        config.output_file,
+        {
+            "results": results,
+            "omega": config.omega,
+            "config": config.to_dict(),
+            "computation_time": elapsed_time,
+        },
+        allow_pickle=True
+    )
 
     logging.info(f"Results successfully saved to {config.output_file}")
+    
+    # Optionally save the configuration to a TOML file
+    config_file = output_path.with_suffix('.toml')
+    config.save_toml(str(config_file))
+    logging.info(f"Configuration saved to {config_file}")
 
 
 if __name__ == "__main__":

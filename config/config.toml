@@ -1,21 +1,48 @@
+# RIRPy Configuration File
+
 [simulation]
+# List of models to run ('freq' for frequency domain, 'time' for time domain)
 models = ["freq"]
+
+# Source position [x, y, z] in meters
 source = [2.5, 2.5, 1.0]
+
+# Receiver position [x, y, z] in meters
 receiver = [7.5, 7.5, 1.0]
+
+# Angular frequency range (rad/s)
 omega_start = 100.0
 omega_end = 1000.0
 omega_points = 1000
+
+# Sound speed in medium (m/s)
 sound_speed = 1500.0
-cutoff_time = 2.0
+
+# Cutoff time for reflections (s)
+cutoff_time = 0.1
 
 [room]
+# Room dimensions (meters)
 Lx = 10.0
 Ly = 10.0
 Lz = 2.0
+
+# Reflection coefficients
 beta_wall = 0.9
 beta_surface = 0.8
 
 [computation]
-use_gpu = true
-batch_size = 8192
-output_file = "greens_function_results.pt"
+# Number of threads for Numba (null = use all available)
+num_threads = 12
+
+# Whether to use parallel execution
+parallel = true
+
+# Batch size for chunked processing
+batch_size = 1000
+
+# Enable Numba's fast math optimizations
+fastmath = true
+
+# Output filename
+output_file = "room_impulse_response.npy"
