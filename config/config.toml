@@ -17,5 +17,5 @@ beta_surface = 0.8
 
 [computation]
 use_gpu = true
-batch_size = 1000
+batch_size = 8192
 output_file = "greens_function_results.pt"
