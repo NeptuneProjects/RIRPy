@@ -14,7 +14,7 @@ omega_points = 1000
 # Sound speed in medium (m/s)
 sound_speed = 1500.0
 # Cutoff time for reflections (s)
-cutoff_time = 2.0
+cutoff_time = 1.0
 
 [room]
 # Room dimensions (meters)
@@ -31,6 +31,6 @@ num_threads = 12
 # Whether to use parallel execution
 parallel = true
 # Batch size for chunked processing
-batch_size = 100000
+batch_size = 1000000
 # Output filename
 output_file = "room_impulse_response.npy"
