@@ -30,13 +30,12 @@ def plot_ir_and_signals(
     ax = axes[1]
     ax.plot(time, source_signal, label="Source Signal", color="tab:blue")
     ax.set_ylabel("Source Signal\nAmplitude")
-    ax.legend()
     ax.grid()
 
     ax = axes[2]
+    ax.sharex(axes[1])
     ax.plot(time, receiver_signal, label="Receiver Signal", color="tab:green")
     ax.set_ylabel("Received Signal\nAmplitude")
-    ax.legend()
     ax.grid()
     plt.xlabel("Time (s)")
 
