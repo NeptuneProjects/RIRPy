@@ -1,4 +1,4 @@
-# RIRPy
+# 🔊RIRPy: Room Impulse Response Modeling
 
 By William Jenkins  
 Scripps Institution of Oceanography  
