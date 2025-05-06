@@ -12,9 +12,9 @@ The method of images is used to calculate the various possible reflection paths,
 For non-constant sound speed, ray tracing methods would be more appropriate.
 
 The "walls" and "floor" of the space are assumed to have the same reflection coefficient.
-To account for the pressure release boundary condition between water and air, the "surface" (or ceiling) is assumed to have its own reflection coefficient.
+The "ceiling" (or "surface", for underwater acoustic tank experiments) is assumed to have its own reflection coefficient; this enables specification for the pressure release boundary condition between, for example, water and air.
 In cases where the boundaries consist of a rigid surface, such as the walls of a tank, the reflection coefficient should be set to a positive value.
-For a pressure release boundary conditions, the reflection coefficient should be set to a negative value.
+For a pressure release boundary condition, the reflection coefficient should be set to a negative value.
 
 The computation of the images is based on the forumlation presented in:
 >Jont B. Allen, David A. Berkley; Image method for efficiently simulating small‐room acoustics. J. Acoust. Soc. Am. 1 April 1979; 65 (4): 943–950. [https://doi.org/10.1121/1.382599](https://doi.org/10.1121/1.382599)
