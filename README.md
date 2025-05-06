@@ -43,6 +43,12 @@ This is not necessarily accurate in all cases, but is likely an acceptable appro
 The following figure is produced using the demonstration script in the `examples` directory.
 ![Impulse response, source signal, and received signal.](/example/demo.png)
 
+> [!TIP]
+> The amplitudes of some of the reflections in the impulse response plotted above exceed 1.0.
+> This is because the plot is computed by passing a vector of [1, 0, 0, ...] through the impulse response.
+> Depending on the sampling rate of the input signal, some of the reflections arrive within the same sample index, and the amplitudes are summed.
+> To recover the reflection coefficients and distances traveled directly, use the `compute_source_image_distances_and_reflection_coefficients` function in the `rirpy.model` module.
+
 ## Performance Considerations
 
 The method of images can be computationally expensive, depending on the room geometry and number of reflections.
