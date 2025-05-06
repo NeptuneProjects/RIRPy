@@ -45,6 +45,14 @@ def propagate_signal(
     Returns:
         Signal at the receiver location [NxM].
     """
+    validate_geometry(
+        source_position,
+        receiver_position,
+        length_x,
+        length_y,
+        length_z,
+    )
+
     numba.set_num_threads(num_threads)
     logging.info(f"Numba is using {numba.get_num_threads()} threads.")
 
@@ -277,3 +285,45 @@ def compute_source_image_distances_and_reflection_coefficients(
     coefficients = coefficients_unsorted[sort_indices]
 
     return distances, coefficients
+
+
+def validate_geometry(
+    source_location: npt.NDArray[np.float64],
+    receiver_location: npt.NDArray[np.float64],
+    length_x: float,
+    length_y: float,
+    length_z: float,
+) -> None:
+    """Validate geometry of model paramterization to ensure source and receiver
+    are within the bounded volume.
+
+    Args:
+        source_location: Vector position of the source (m) [3x1].
+        receiver_location: Vector position of the receiver (m) [3x1].
+        length_x: Length of the tank in the x-dimension (m).
+        length_y: Length of the tank in the y-dimension (m).
+        length_z: Length of the tank in the z-dimension (m).
+    Raises:
+        ValueError: If source or receiver positions are outside the tank dimensions.
+    """
+    # Ensure positions are valid
+    if len(source_location) != 3 or len(receiver_location) != 3:
+        raise ValueError("Source and receiver positions must be 3D vectors")
+
+    # Ensure room dimensions are valid
+    if length_x <= 0 or length_y <= 0 or length_z <= 0:
+        raise ValueError("Tank dimensions must be positive")
+
+    # Check if source and receiver are within the tank dimensions
+    if (
+        not (0 <= source_location[0] <= length_x)
+        or not (0 <= source_location[1] <= length_y)
+        or not (0 <= source_location[2] <= length_z)
+    ):
+        raise ValueError("Source position is outside the tank dimensions")
+    if (
+        not (0 <= receiver_location[0] <= length_x)
+        or not (0 <= receiver_location[1] <= length_y)
+        or not (0 <= receiver_location[2] <= length_z)
+    ):
+        raise ValueError("Receiver position is outside the tank dimensions")
