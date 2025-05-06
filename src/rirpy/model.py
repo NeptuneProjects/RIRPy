@@ -271,6 +271,7 @@ def propagate_signal(
         length_y,
         length_z,
     )
+    validate_source_signal(source_signal)
 
     numba.set_num_threads(num_threads)
     logging.info(f"Numba is using {numba.get_num_threads()} threads.")
@@ -361,3 +362,20 @@ def validate_geometry(
         or not (0 <= receiver_location[2] <= length_z)
     ):
         raise ValueError("Receiver position is outside the tank dimensions")
+
+
+def validate_source_signal(source_signal: npt.NDArray[np.float64]) -> None:
+    """Validate the source signal to ensure it is a 1D or 2D array and not empty.
+
+    Args:
+        source_signal: The original signal (1D or 2D array)
+
+    Raises:
+        ValueError: If the source signal is not a 1D or 2D array or is empty.
+    """
+    if source_signal.ndim > 2:
+        raise ValueError(f"Expected 1D or 2D array, got {source_signal.ndim}D")
+    if source_signal.size == 0:
+        raise ValueError("Input signal cannot be empty")
+    if source_signal.ndim == 0:
+        raise ValueError("Input signal cannot be a scalar")
