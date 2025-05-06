@@ -40,7 +40,8 @@ The general procedure is as follows:
 Cylindrical spreading is applied to the impulse response for each reflection.
 This is not necessarily accurate in all cases, but is likely an acceptable approximation for most scenarios.
 
-A demonstration of the package can be found in the `examples` directory.
+The following figure is produced using the demonstration script in the `examples` directory.
+![Impulse response, source signal, and received signal.](/example/demo.png)
 
 ## Performance Considerations
 
