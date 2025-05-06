@@ -3,7 +3,7 @@
 import unittest
 
 import numpy as np
-from rirpy.model import propagate_signal, validate_geometry
+from rirpy.model import propagate_signal, validate_geometry, apply_time_delay
 
 
 class TestModel(unittest.TestCase):
@@ -88,6 +88,85 @@ class TestModel(unittest.TestCase):
             validate_geometry(
                 source_position, receiver_position, length_x, length_y, length_z
             )
+
+    def test_1d_with_positive_shift(self):
+        """Test 1D signal with a positive shift."""
+        signal = np.array([1, 2, 3, 4, 5])
+        shift = 2
+        num_samples = len(signal)
+        result = apply_time_delay(signal, shift, num_samples)
+        expected = np.array([0, 0, 1, 2, 3])
+        np.testing.assert_array_equal(result, expected)
+
+    def test_1d_with_zero_shift(self):
+        """Test 1D signal with no shift."""
+        signal = np.array([1, 2, 3, 4, 5])
+        shift = 0
+        num_samples = len(signal)
+        result = apply_time_delay(signal, shift, num_samples)
+        expected = np.array([1, 2, 3, 4, 5])
+        np.testing.assert_array_equal(result, expected)
+
+    def test_2d_with_positive_shift(self):
+        """Test 2D signal with a positive shift."""
+        signal1 = np.array([1, 2, 3, 4, 5])
+        signal2 = np.array([10, 20, 30, 40, 50])
+        signal = np.column_stack((signal1, signal2))
+        num_samples = signal.shape[0]
+        shift = 3
+        result = apply_time_delay(signal, shift, num_samples)
+
+        expected = np.zeros_like(signal)
+        expected[:, 0] = [0, 0, 0, 1, 2]
+        expected[:, 1] = [0, 0, 0, 10, 20]
+        np.testing.assert_array_equal(result, expected)
+
+    def test_float_data(self):
+        """Test with floating point data."""
+        signal = np.array([1.1, 2.2, 3.3, 4.4, 5.5])
+        shift = 2
+        num_samples = len(signal)
+        result = apply_time_delay(signal, shift, num_samples)
+        expected = np.array([0.0, 0.0, 1.1, 2.2, 3.3])
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_sine_wave(self):
+        """Test with a sine wave."""
+        t = np.linspace(0, 2 * np.pi, 100)
+        signal = np.sin(t)
+        shift = 25
+        num_samples = len(signal)
+        result = apply_time_delay(signal, shift, num_samples)
+
+        # Expected: zeros for the first 25 samples, then sine wave
+        expected = np.zeros(100)
+        expected[shift:] = signal[: 100 - shift]
+        np.testing.assert_array_almost_equal(result, expected)
+
+    def test_multi_channel_signal(self):
+        """Test with multi-channel signal (more than 2 columns)."""
+        signal1 = np.array([1, 2, 3, 4, 5])
+        signal2 = np.array([10, 20, 30, 40, 50])
+        signal3 = np.array([100, 200, 300, 400, 500])
+        signal = np.column_stack((signal1, signal2, signal3))
+        shift = 2
+        num_samples = signal.shape[0]
+        result = apply_time_delay(signal, shift, num_samples)
+
+        expected = np.zeros_like(signal).T
+        expected[0] = [0, 0, 1, 2, 3]
+        expected[1] = [0, 0, 10, 20, 30]
+        expected[2] = [0, 0, 100, 200, 300]
+        np.testing.assert_array_equal(result, expected.T)
+
+    def test_edge_case_shift_equals_num_samples(self):
+        """Test edge case where shift equals num_samples."""
+        signal = np.array([1, 2, 3, 4, 5])
+        shift = 5
+        num_samples = 5
+        result = apply_time_delay(signal, shift, num_samples)
+        expected = np.zeros(5)
+        np.testing.assert_array_equal(result, expected)
 
 
 if __name__ == "__main__":
