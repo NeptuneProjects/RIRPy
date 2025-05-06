@@ -66,7 +66,7 @@ def signal_lfm_chirp(
     )
 
 
-def main():
+def main() -> None:
     print("-" * 60)
     print("🔊RIRPy: Room Impulse Response Modeling")
     print("-" * 60)
@@ -88,7 +88,7 @@ def main():
     length_x = 3.0  # Room length in x direction
     length_y = 3.0  # Room length in y direction
     length_z = 1.5  # Room height
-    sound_speed = 343.0  # Speed of sound (m/s)
+    sound_speed = 343.0  # Speed of sound (m/s) in air
     refl_coeff_wall = 0.9  # Wall (& floor) reflection coefficient
     refl_coeff_ceil = 0.9  # Ceiling (surface) reflection coefficient
     cutoff_time = 0.2  # Cutoff time for reflections (s)
@@ -116,8 +116,13 @@ def main():
         y_receiver[:, 0],
         y_receiver[:, 1],
         ir_window=2 * cutoff_time,
+        title=(
+            f"Room Dimensions: x={length_x:.2f} m, y={length_y:.2f} m, z={length_z:.2f} m\n"
+            f"Source Location: x={r_source[0]:.2f} m, y={r_source[1]:.2f} m, z={r_source[2]:.2f} m\n"
+            f"Receiver Location: x={r_receiver[0]:.2f} m, y={r_receiver[1]:.2f} m, z={r_receiver[2]:.2f} m\n"
+        )
     )
-    plt.show()
+    fig.savefig("example/demo.png", dpi=150, bbox_inches="tight")
 
 
 if __name__ == "__main__":
