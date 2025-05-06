@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import time
 
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 
@@ -67,12 +67,10 @@ def signal_lfm_chirp(
 
 
 def main() -> None:
-    print("-" * 60)
-    print("🔊RIRPy: Room Impulse Response Modeling")
-    print("-" * 60)
+    print("-" * 60, "\n🔊RIRPy: Room Impulse Response Modeling\n", "-" * 60, sep="")
 
     sampling_rate = 20000.0  # Sampling rate (Hz)
-    y_impulse = signal_impulse(1.0, 20000.0)  # 1 s impulse signal
+    y_impulse = signal_impulse(1.0, sampling_rate)  # 1 s impulse signal
     y_source = signal_lfm_chirp(
         chirp_duration=0.1,  # 100 ms chirp duration
         sampling_rate=sampling_rate,
@@ -81,7 +79,7 @@ def main() -> None:
         front_padding_duration=0.45,  # 450 ms front padding
         end_padding_duration=0.45,  # 450 ms end padding
     )
-    time = np.arange(0, len(y_source)) / sampling_rate  # Time vector (s)
+    time_vec = np.arange(0, len(y_source)) / sampling_rate  # Time vector (s)
 
     r_source = np.array([1.0, 1.0, 0.75])  # Source position (m)
     r_receiver = np.array([2.0, 2.0, 0.75])  # Receiver position (m)
@@ -94,7 +92,9 @@ def main() -> None:
     cutoff_time = 0.2  # Cutoff time for reflections (s)
 
     # The model function can accept multiple signals of the same length.
-    y_combined = np.vstack([y_impulse, y_source]).T
+    y_combined = np.vstack((y_impulse, y_source))
+
+    time_start = time.time()
     y_receiver = model.propagate_signal(
         y_combined,
         sampling_rate,
@@ -109,18 +109,19 @@ def main() -> None:
         cutoff_time,
         num_threads=NUM_THREADS,
     )
+    logging.info(f"Elapsed time: {time.time() - time_start:.6f} seconds")
 
     fig = plot_ir_and_signals(
-        time,
+        time_vec,
         y_source,
-        y_receiver[:, 0],
-        y_receiver[:, 1],
+        y_receiver[0],
+        y_receiver[1],
         ir_window=2 * cutoff_time,
         title=(
             f"Room Dimensions: x={length_x:.2f} m, y={length_y:.2f} m, z={length_z:.2f} m\n"
             f"Source Location: x={r_source[0]:.2f} m, y={r_source[1]:.2f} m, z={r_source[2]:.2f} m\n"
             f"Receiver Location: x={r_receiver[0]:.2f} m, y={r_receiver[1]:.2f} m, z={r_receiver[2]:.2f} m\n"
-        )
+        ),
     )
     fig.savefig("example/demo.png", dpi=150, bbox_inches="tight")
 
