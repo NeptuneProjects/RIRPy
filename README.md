@@ -41,7 +41,7 @@ Cylindrical spreading is applied to the impulse response for each reflection.
 This is not necessarily accurate in all cases, but is likely an acceptable approximation for most scenarios.
 
 The following figure is produced using the demonstration script in the `examples` directory.
-![Impulse response, source signal, and received signal.](/example/demo.png)
+![Impulse response, source signal, and received signal.](/example/lfm_chirp_signal_response.png)
 
 > [!TIP]
 > The amplitudes of some of the reflections in the impulse response plotted above exceed 1.0.
