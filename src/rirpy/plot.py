@@ -5,40 +5,51 @@ import numpy as np
 import numpy.typing as npt
 
 
-def plot_ir_and_signals(
+def plot_channel_response(
+    frequency: npt.NDArray[np.float64],
+    freq_domain_data: dict[str, dict[npt.NDArray[np.float64], dict]],
     time: npt.NDArray[np.float64],
-    source_signal: npt.NDArray[np.float64],
-    impulse_response: npt.NDArray[np.float64],
-    receiver_signal: npt.NDArray[np.float64],
-    ir_window: float | None = None,
-    title: str | None = None,
+    time_domain_data: dict[str, npt.NDArray[np.float64]],
+    refl_times: npt.NDArray[np.float64],
+    refl_amplitudes: npt.NDArray[np.float64],
+    figsize: tuple[int, int] = (12, 12),
+    tlim: tuple[float, float] | None = None,
+    refl_ref_time: float = 0.0,
 ) -> plt.Figure:
-    fig, axes = plt.subplots(3, 1, figsize=(10, 8), gridspec_kw={"hspace": 0.2})
+    if tlim is None:
+        tlim = (0, max(time))
 
-    ax = axes[0]
-    impulse_response[impulse_response == 0.0] = np.nan
+    fig, axs = plt.subplots(nrows=3, figsize=figsize)
+    ax = axs[0]
+    for key, args in freq_domain_data.items():
+        ax.plot(frequency, args["data"], label=key, **args.get("kwargs", None))
+    ax.grid(True)
+    ax.legend()
+    ax.set_xlabel("Frequency (Hz)")
+    ax.set_ylabel("Channel Response\nAmplitude")
+
+    ax = axs[1]
     markerline, _, _ = ax.stem(
-        time, impulse_response, markerfmt="o", linefmt="gray", basefmt="k-"
+        refl_times + refl_ref_time,
+        refl_amplitudes,
+        markerfmt="o",
+        linefmt="gray",
+        basefmt="k-",
     )
-    markerline.set_markeredgecolor("r")
+    markerline.set_markeredgecolor("k")
     markerline.set_markerfacecolor("none")
-    ax.set_ylabel("Impulse Response\nAmplitude")
-    ax.grid()
-    if ir_window is not None:
-        ax.set_xlim(0, ir_window)
+    ax.set_xlim(tlim)
+    ax.grid(True)
+    ax.set_ylabel("Reflections\nAmplitude")
 
-    ax = axes[1]
-    ax.plot(time, source_signal, label="Source Signal", color="tab:blue")
-    ax.set_ylabel("Source Signal\nAmplitude")
-    ax.grid()
-
-    ax = axes[2]
-    ax.sharex(axes[1])
-    ax.plot(time, receiver_signal, label="Receiver Signal", color="tab:green")
-    ax.set_ylabel("Received Signal\nAmplitude")
-    ax.grid()
-    plt.xlabel("Time (s)")
-
-    fig.suptitle(title)
+    ax = axs[2]
+    ax.sharex(axs[1])
+    for key, args in time_domain_data.items():
+        ax.plot(time, args["data"], label=key, **args.get("kwargs", None))
+    ax.set_xlim(tlim)
+    ax.grid(True)
+    ax.legend()
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Channel Response\nAmplitude")
 
     return fig
