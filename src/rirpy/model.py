@@ -1,41 +1,114 @@
 # -*- coding: utf-8 -*-
 
+from enum import Enum
+import functools
 import logging
 import math
+import time
+from typing import Callable, Sequence, TypeVar
 
 import numpy as np
 import numpy.typing as npt
 import numba
 
-logger = logging.getLogger(__name__)
+T = TypeVar("T")
+T_GreensResult = npt.NDArray[np.complex128]
+T_ImagesResult = tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]
+
+
+class MethodChoice(str, Enum):
+    BOTH = "both"
+    GREENS = "greens"
+    IMAGES = "images"
+
+
+def _log_execution_time(
+    message: str = "Function",
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """Decorator that logs the execution time of a function.
+
+    Args:
+        message: Description of the function for logging
+
+    Returns:
+        Decorated function that logs timing information
+    """
+
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @functools.wraps(func)
+        def wrapper(*args: any, **kwargs: any) -> T:
+            logging.info(message)
+            time_start = time.time()
+            result = func(*args, **kwargs)
+            execution_time = time.time() - time_start
+            logging.info(f"Completed in {execution_time:.6f} seconds.")
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+def convert_frequency_to_angular(
+    frequency: float | npt.NDArray[np.float64],
+) -> float | np.ndarray:
+    """Convert frequency in Hz to angular frequency in radians.
+
+    Args:
+        frequency: Frequency in Hz (float or array).
+
+    Returns:
+        Angular frequency in radians.
+    """
+    return 2 * np.pi * frequency
 
 
 @numba.njit
-def apply_time_delay(
-    source_signal: npt.NDArray[np.float64], shift_amount: int, num_samples: int
-) -> npt.NDArray[np.float64]:
-    """Creates a delayed version of the source signal by the specified shift amount.
+def count_reflections(
+    i_max: int,
+    j_max: int,
+    k_max: int,
+    length_x: float,
+    length_y: float,
+    length_z: float,
+    cutoff_distance: float,
+    max_diagonal_length: float,
+) -> int:
+    """Count the total number of valid reflections.
 
     Args:
-        source_signal: The original signal (1D or 2D array)
-        shift_amount: The amount to delay the signal (in samples)
-        num_samples: Total number of samples in the output
+        i_max: Maximum number of reflections in the x-dimension.
+        j_max: Maximum number of reflections in the y-dimension.
+        k_max: Maximum number of reflections in the z-dimension.
+        length_x: Length of room in the x-dimension (m).
+        length_y: Length of room in the y-dimension (m).
+        length_z: Length of room in the z-dimension (m).
+        cutoff_distance: Cutoff distance for reflections (m).
+        max_diagonal_length: Maximum diagonal length of the room (m).
 
     Returns:
-        y_image: The delayed version of the source signal
+        Total number of valid reflections.
     """
-    y_image = np.zeros_like(source_signal)
-    source_subset = (
-        source_signal[: num_samples - shift_amount]
-        if shift_amount > 0
-        else source_signal
-    )
-    y_image[shift_amount : shift_amount + len(source_subset)] = source_subset
-    return y_image
+    count = 0
+    for i_current in range(-i_max, i_max + 1):
+        for j in range(-j_max, j_max + 1):
+            for k in range(-k_max, k_max + 1):
+                r_translation = np.array(
+                    [2.0 * i_current * length_x, 2.0 * j * length_y, 2.0 * k * length_z]
+                )
+
+                if (
+                    np.sqrt(np.sum(r_translation**2)) - 2 * max_diagonal_length
+                    <= cutoff_distance
+                ):
+                    # 8 images per valid block
+                    count += 8
+    return count
 
 
-@numba.njit(parallel=True)
-def compute_source_image_distances_and_reflection_coefficients(
+@_log_execution_time("Computing distances and reflection coefficients.")
+@numba.njit
+def distances_and_amplitudes(
     source_location: npt.NDArray[np.float64],
     receiver_location: npt.NDArray[np.float64],
     length_x: float,
@@ -45,18 +118,18 @@ def compute_source_image_distances_and_reflection_coefficients(
     refl_coeff_wall: float,
     refl_coeff_ceil: float,
     cutoff_time: float,
-) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+) -> T_ImagesResult:
     """
-    Calculates the distances and reflection coefficients for source images in a tank.
+    Calculates the distances and reflection coefficients for source images in a room.
 
     Args:
         source_location: Vector position of the source (m) [3x1].
         receiver_location: Vector position of the receiver (m) [3x1].
-        length_x: Length of the tank in the x-dimension (m).
-        length_y: Length of the tank in the y-dimension (m).
-        length_z: Length of the tank in the z-dimension (m).
+        length_x: Length of the room in the x-dimension (m).
+        length_y: Length of the room in the y-dimension (m).
+        length_z: Length of the room in the z-dimension (m).
         sound_speed: Speed of sound (m/s).
-        refl_coeff_wall: Reflection coefficient for the 5 non-surface walls of the tank.
+        refl_coeff_wall: Reflection coefficient for the 5 non-surface walls of the room.
         refl_coeff_ceil: Reflection coefficient for the water surface.
         cutoff_time: Time over which to sum reflected paths (s).
 
@@ -70,170 +143,125 @@ def compute_source_image_distances_and_reflection_coefficients(
     k_max = math.ceil(cutoff_distance / (length_z * 2))
     max_diagonal_length = np.sqrt(length_x**2 + length_y**2 + length_z**2)
 
-    # Arrays can't dynamically grow in parallel regions with Numba, so results
-    # are collected from each parallel task and combined later.
-    all_distances = []
-    all_coefficients = []
+    # First, count the total number of valid reflections to allocate arrays
+    total_reflections = count_reflections(
+        i_max,
+        j_max,
+        k_max,
+        length_x,
+        length_y,
+        length_z,
+        cutoff_distance,
+        max_diagonal_length,
+    )
 
-    # Process blocks in parallel
-    for l in numba.prange(-i_max, i_max + 1):
-        distances_local, coefficients_local = process_block(
-            l,
-            j_max,
-            k_max,
-            source_location,
-            receiver_location,
-            length_x,
-            length_y,
-            length_z,
-            refl_coeff_wall,
-            refl_coeff_ceil,
-            cutoff_distance,
-            max_diagonal_length,
-        )
+    # Pre-allocate arrays
+    distances = np.zeros(total_reflections, dtype=np.float64)
+    coefficients = np.zeros(total_reflections, dtype=np.float64)
 
-        # Thread-local lists to be combined later
-        all_distances.append(distances_local)
-        all_coefficients.append(coefficients_local)
+    # Fill arrays
+    idx = 0
+    for i_current in numba.prange(-i_max, i_max + 1):
+        for j in range(-j_max, j_max + 1):
+            for k in range(-k_max, k_max + 1):
+                # Compute lattice displacement vector
+                r_translation = np.array(
+                    [2.0 * i_current * length_x, 2.0 * j * length_y, 2.0 * k * length_z]
+                )
 
-    # Combine results from all threads
-    distances_unsorted = []
-    coefficients_unsorted = []
+                if (
+                    np.sqrt(np.sum(r_translation**2)) - 2 * max_diagonal_length
+                    <= cutoff_distance
+                ):
+                    # Iterate over the 8 source images within this block
+                    for l in range(2):
+                        for m in range(2):
+                            for n in range(2):
+                                # Compute the source image separation vector
+                                image_factors = np.array(
+                                    [1.0 - 2.0 * l, 1.0 - 2.0 * m, 1.0 - 2.0 * n]
+                                )
+                                r_image = (
+                                    r_translation + image_factors * source_location
+                                )
 
-    for thread_distances, thread_coefficients in zip(all_distances, all_coefficients):
-        distances_unsorted.extend(thread_distances)
-        coefficients_unsorted.extend(thread_coefficients)
+                                # Compute distance
+                                R = r_image - receiver_location
+                                distance = np.sqrt(np.sum(R**2))
 
-    distances_unsorted = np.array(distances_unsorted)
-    coefficients_unsorted = np.array(coefficients_unsorted)
+                                # Compute reflection coefficient product
+                                b = (
+                                    refl_coeff_wall
+                                    ** (
+                                        abs(i_current - l)
+                                        + abs(i_current)
+                                        + abs(j - m)
+                                        + abs(j)
+                                        + abs(k - n)
+                                    )
+                                ) * (refl_coeff_ceil ** abs(k))
+
+                                distances[idx] = distance
+                                coefficients[idx] = b
+                                idx += 1
 
     # Sort arrays by distance
-    sort_indices = np.argsort(distances_unsorted)
-    distances = distances_unsorted[sort_indices]
-    coefficients = coefficients_unsorted[sort_indices]
+    sort_indices = np.argsort(distances)
+    distances = distances[sort_indices]
+    coefficients = coefficients[sort_indices]
 
-    return distances, coefficients
+    # Normalize coefficients by distance (cylindrical spreading)
+    normalized_coefficients = coefficients / distances
 
-
-@numba.njit
-def create_image_signal(
-    source_signal: npt.NDArray[np.float64], shift_amount: int, scale: float
-) -> npt.NDArray[np.float64]:
-    """Creates a delayed version of the source signal with a specified scale.
-
-    Args:
-        source_signal: The original signal (1D or 2D array)
-        shift_amount: The amount to delay the signal (in samples)
-        scale: The scaling factor for the delayed signal
-
-    Returns:
-        y_image: The delayed and scaled version of the source signal
-    """
-    num_samples = source_signal.shape[-1]
-
-    # If signal is 2D, array is transposed to allow NumPy operations to act
-    # on the first axis regardless of the number of channels.
-    if source_signal.ndim > 1:
-        source_signal = source_signal.T
-    # Create delayed signal
-    y_delayed = apply_time_delay(source_signal, shift_amount, num_samples)
-    # Apply coefficient and distance attenuation
-    y_image = y_delayed * scale
-    # Zero out values before the arrival time
-    y_image[:shift_amount] = 0
-
-    # If signal is 2D, transpose back to original shape
-    if source_signal.ndim > 1:
-        return y_image.T
-    return y_image
+    return distances, normalized_coefficients
 
 
-@numba.njit
-def process_block(
-    i_current: int,
-    j_max: int,
-    k_max: int,
-    source_position: npt.NDArray[np.float64],
-    receiver_position: npt.NDArray[np.float64],
-    length_x: float,
-    length_y: float,
-    length_z: float,
-    refl_coeff_wall: float,
-    refl_coeff_ceil: float,
-    cutoff_distance: float,
-    max_diagonal_length: float,
-) -> tuple[list[float], list[float]]:
-    """
-    Processes one block of the calculation for parallelization.
+@numba.jit
+def free_field_greens_function(
+    source_location: npt.NDArray[np.float64],
+    receiver_location: npt.NDArray[np.float64],
+    sound_speed: float,
+    omega: npt.NDArray[np.float64],
+) -> T_GreensResult:
+    """Compute the free-field Green's function in frequency domain for a
+    point source and receiver at positions r1 and r2.
 
     Args:
-        i_current: Current block index in the x-dimension.
-        j_max: Maximum block index in the y-dimension.
-        k_max: Maximum block index in the z-dimension.
-        source_position: Vector position of the source (m) [3x1].
-        receiver_position: Vector position of the receiver (m) [3x1].
-        length_x: Length of the tank in the x-dimension (m).
-        length_y: Length of the tank in the y-dimension (m).
-        length_z: Length of the tank in the z-dimension (m).
-        refl_coeff_wall: Reflection coefficient for the 5 non-surface walls of the tank.
-        refl_coeff_ceil: Reflection coefficient for the water surface.
-        cutoff_distance: Maximum distance to consider for reflections (m).
-        max_diagonal_length: Maximum diagonal length of the tank (m).
+        source_location: Vector position of the source (m) [array of size 3]
+        receiver_location: Vector position of the receiver (m) [array of size 3]
+        sound_speed: Sound speed (m/s)
+        omega: Angular frequencies at which to compute g (radians) [array of size N]
 
     Returns:
-        Distances and reflection coefficients for the block.
+        greens_func_free: Green's function for propagation between the source
+            and receiver positions as a function of omega.
     """
-    distances_list = []
-    coefficients_list = []
+    N = omega.size
+    greens_func_free = np.zeros(N, dtype=np.complex128)
 
-    for j in range(-j_max, j_max + 1):
-        for k in range(-k_max, k_max + 1):
-            # Compute lattice displacement vector
-            r_translation = np.array(
-                [2.0 * i_current * length_x, 2.0 * j * length_y, 2.0 * k * length_z]
-            )
+    distance = np.linalg.norm(receiver_location - source_location)
 
-            if (
-                np.sqrt(np.sum(r_translation**2)) - 2 * max_diagonal_length
-                <= cutoff_distance
-            ):
-                # Iterate over the 8 source images within this block
-                for l in range(2):
-                    for m in range(2):
-                        for n in range(2):
-                            # Compute the source image separation vector
-                            image_factors = np.array(
-                                [1.0 - 2.0 * l, 1.0 - 2.0 * m, 1.0 - 2.0 * n]
-                            )
-                            r_image = r_translation + image_factors * source_position
+    if N % 2 == 0:
+        midpoint = N // 2
+        greens_func_free[:midpoint] = (
+            np.exp(-1j * distance * omega[:midpoint] / sound_speed) / distance
+        )
+        greens_func_free[midpoint:] = np.conj(greens_func_free[:midpoint][::-1])
+    else:
+        midpoint = N // 2 + 1
+        greens_func_free[:midpoint] = (
+            np.exp(-1j * distance * omega[:midpoint] / sound_speed) / distance
+        )
+        greens_func_free[midpoint:] = np.conj(greens_func_free[: midpoint - 1][::-1])
 
-                            # Compute distance
-                            R = r_image - receiver_position
-                            distance = np.sqrt(np.sum(R**2))
-
-                            # Compute reflection coefficient product
-                            b = (
-                                refl_coeff_wall
-                                ** (
-                                    abs(i_current - l)
-                                    + abs(i_current)
-                                    + abs(j - m)
-                                    + abs(j)
-                                    + abs(k - n)
-                                )
-                            ) * (refl_coeff_ceil ** abs(k))
-
-                            distances_list.append(distance)
-                            coefficients_list.append(b)
-
-    return distances_list, coefficients_list
+    return greens_func_free
 
 
-def propagate_signal(
-    source_signal: npt.NDArray[np.float64],
-    sampling_rate: float,
-    source_position: npt.NDArray[np.float64],
-    receiver_position: npt.NDArray[np.float64],
+@_log_execution_time("Computing Green's function.")
+@numba.jit(parallel=True)
+def greens_function(
+    source_location: npt.NDArray[np.float64],
+    receiver_location: npt.NDArray[np.float64],
     length_x: float,
     length_y: float,
     length_z: float,
@@ -241,85 +269,174 @@ def propagate_signal(
     refl_coeff_wall: float,
     refl_coeff_ceil: float,
     cutoff_time: float,
-    num_threads: int = 4,
-) -> npt.NDArray[np.float64]:
-    """
-    Computes the received signal in a tank based on reflections from walls
-    in the time domain.
+    omega: float | npt.NDArray[np.float64],
+) -> T_GreensResult:
+    """Compute the Green's function for a rectilinear space using method of images.
 
     Args:
-        source_signal: Source time series, can be multiple column vectors [NxM].
-        sampling_rate: Sampling frequency (Hz).
-        source_position: Vector position of the source (m) [3x1].
-        receiver_position: Vector position of the receiver (m) [3x1].
-        length_x: Length of the tank in the x-dimension (m).
-        length_y: Length of the tank in the y-dimension (m).
-        length_z: Length of the tank in the z-dimension (m).
-        sound_speed: Speed of sound (m/s).
-        refl_coeff_wall: Reflection coefficient for the 5 non-surface walls of the tank.
-        refl_coeff_ceil: Reflection coefficient for the water surface.
-        cutoff_time: Time over which to sum reflected paths (s).
-        num_threads: Number of threads for parallel processing. Defaults to 4.
+        source_location: Vector position of the source (m) [3x1].
+        receiver_location: Vector position of the receiver (m) [3x1].
+        length_x: Length of the room in the x-dimension (m).
+        length_y: Length of the room in the y-dimension (m).
+        length_z: Length of the room in the z-dimension (m).
+        sound_speed: Speed of sound in the
+            medium (m/s).
+        refl_coeff_wall: Wall (& floor) reflection coefficient.
+        refl_coeff_ceil: Ceiling (surface) reflection coefficient.
+        cutoff_time: Cutoff time for reflections (s).
+        omega: Angular frequencies at which to compute g (radians) [array of size N].
+    Returns:
+        greens_func: Green's function for propagation between the source
+            and receiver positions as a function of frequency.
+    """
+    # Compute limits of sum from cutoff time
+    cutoff_distance = cutoff_time * sound_speed
+    l_max = int(np.ceil(cutoff_distance / (length_x * 2)))
+    m_max = int(np.ceil(cutoff_distance / (length_y * 2)))
+    n_max = int(np.ceil(cutoff_distance / (length_z * 2)))
+    max_diagonal_length = np.sqrt(length_x**2 + length_y**2 + length_z**2)
+
+    greens_func = np.zeros(omega.size, dtype=np.complex128)
+
+    # Iterate over lattice displacement vectors using prange for parallel loops
+    for l in numba.prange(-l_max, l_max + 1):
+        # for l in range(-l_max, l_max + 1):
+        for m in range(-m_max, m_max + 1):
+            for n in range(-n_max, n_max + 1):
+                # Compute lattice displacement vector and check cutoff distance
+                r_translation = 2 * np.array([l * length_x, m * length_y, n * length_z])
+                if (
+                    np.linalg.norm(r_translation) - 2 * max_diagonal_length
+                    <= cutoff_distance
+                ):
+                    # Iterate over the 8 source images within this block
+                    for i in range(2):
+                        for j in range(2):
+                            for k in range(2):
+                                # Compute the source image separation vector
+                                sign = np.array([1 - 2 * i, 1 - 2 * j, 1 - 2 * k])
+                                r_image = r_translation + sign * source_location
+
+                                # Compute free-field Green's function
+                                g_free = free_field_greens_function(
+                                    r_image, receiver_location, sound_speed, omega
+                                )
+
+                                # Multiplength_y by reflection coefficients and add to the sum
+                                reflection_coefs = refl_coeff_wall ** (
+                                    abs(l - i)
+                                    + abs(l)
+                                    + abs(m - j)
+                                    + abs(m)
+                                    + abs(n - k)
+                                ) * refl_coeff_ceil ** abs(n)
+                                greens_func += reflection_coefs * g_free
+
+    return greens_func
+
+
+def run(
+    source_location: Sequence[float],
+    receiver_location: Sequence[float],
+    length_x: float,
+    length_y: float,
+    length_z: float,
+    sound_speed: float,
+    refl_coeff_wall: float,
+    refl_coeff_ceil: float,
+    cutoff_time: float,
+    frequency: float | Sequence[float] | None = None,
+    method: MethodChoice | str = MethodChoice.BOTH,
+    num_threads: int = 4,
+) -> T_ImagesResult | T_GreensResult | tuple[T_ImagesResult, T_GreensResult]:
+    """Compute the Green's function for a rectilinear space using method of images.
+
+    Args:
+        source_location: Vector position of the source (m) [3x1].
+        receiver_location: Vector position of the receiver (m) [3x1].
+        length_x: Length of the room in the x-dimension (m).
+        length_y: Length of the room in the y-dimension (m).
+        length_z: Length of the room in the z-dimension (m).
+        sound_speed: Speed of sound in the
+            medium (m/s).
+        refl_coeff_wall: Wall (& floor) reflection coefficient.
+        refl_coeff_ceil: Ceiling (surface) reflection coefficient.
+        cutoff_time: Cutoff time for reflections (s).
+        frequency: Frequency in Hz (float or array).
+        method: Method to use for computation. Options are "image", "greens",
+            or "both". "image" computes distances and coefficients, "greens"
+            computes the Green's function, and "both" computes both.
+        num_threads: Number of threads to use for parallel computation.
 
     Returns:
-        Signal at the receiver location [NxM].
+        greens_func: Green's function for propagation between the source
+            and receiver positions as a function of frequency.
     """
+    source_location = np.asarray(source_location, dtype=np.float64)
+    receiver_location = np.asarray(receiver_location, dtype=np.float64)
+    omega = convert_frequency_to_angular(np.asarray(frequency, dtype=np.float64))
     validate_geometry(
-        source_position,
-        receiver_position,
-        length_x,
-        length_y,
-        length_z,
+        source_location=source_location,
+        receiver_location=receiver_location,
+        length_x=length_x,
+        length_y=length_y,
+        length_z=length_z,
     )
-    validate_source_signal(source_signal)
 
     numba.set_num_threads(num_threads)
     logging.info(f"Numba is using {numba.get_num_threads()} threads.")
 
-    dt = 1 / sampling_rate
-
-    image_distances, image_coefficients = (
-        compute_source_image_distances_and_reflection_coefficients(
-            source_position,
-            receiver_position,
-            length_x,
-            length_y,
-            length_z,
-            sound_speed,
-            refl_coeff_wall,
-            refl_coeff_ceil,
-            cutoff_time,
+    if method == MethodChoice.IMAGES:
+        return distances_and_amplitudes(
+            source_location=source_location,
+            receiver_location=receiver_location,
+            length_x=length_x,
+            length_y=length_y,
+            length_z=length_z,
+            sound_speed=sound_speed,
+            refl_coeff_wall=refl_coeff_wall,
+            refl_coeff_ceil=refl_coeff_ceil,
+            cutoff_time=cutoff_time,
         )
-    )
-    logging.info(f"{len(image_distances):,} reflections computed.")
-
-    # Initialize output with same shape as input
-    y_receiver = np.zeros_like(source_signal, dtype=np.float64)
-
-    # Compute time offset for each image
-    t_offset = image_distances / sound_speed
-    t_offset_ind = np.round(t_offset / dt).astype(np.int64)
-
-    # Find images that have arrivals within the signal duration
-    num_samples = source_signal.shape[-1]
-
-    # Process each relevant image
-    for shift_amount, image_coefficient, image_distance in zip(
-        t_offset_ind, image_coefficients, image_distances
-    ):
-        if shift_amount >= num_samples:
-            break
-
-        # Apply distance attenuation (assumes cylindrical spreading)
-        coefficient = image_coefficient / image_distance
-
-        # Create delayed signal
-        y_image = create_image_signal(source_signal, shift_amount, coefficient)
-
-        # Add to result
-        y_receiver += y_image
-
-    return y_receiver
+    if method == MethodChoice.GREENS:
+        return greens_function(
+            source_location=source_location,
+            receiver_location=receiver_location,
+            length_x=length_x,
+            length_y=length_y,
+            length_z=length_z,
+            sound_speed=sound_speed,
+            refl_coeff_wall=refl_coeff_wall,
+            refl_coeff_ceil=refl_coeff_ceil,
+            cutoff_time=cutoff_time,
+            omega=omega,
+        )
+    if method == MethodChoice.BOTH:
+        return (
+            distances_and_amplitudes(
+                source_location=source_location,
+                receiver_location=receiver_location,
+                length_x=length_x,
+                length_y=length_y,
+                length_z=length_z,
+                sound_speed=sound_speed,
+                refl_coeff_wall=refl_coeff_wall,
+                refl_coeff_ceil=refl_coeff_ceil,
+                cutoff_time=cutoff_time,
+            ),
+            greens_function(
+                source_location=source_location,
+                receiver_location=receiver_location,
+                length_x=length_x,
+                length_y=length_y,
+                length_z=length_z,
+                sound_speed=sound_speed,
+                refl_coeff_wall=refl_coeff_wall,
+                refl_coeff_ceil=refl_coeff_ceil,
+                cutoff_time=cutoff_time,
+                omega=omega,
+            ),
+        )
 
 
 def validate_geometry(
@@ -335,11 +452,11 @@ def validate_geometry(
     Args:
         source_location: Vector position of the source (m) [3x1].
         receiver_location: Vector position of the receiver (m) [3x1].
-        length_x: Length of the tank in the x-dimension (m).
-        length_y: Length of the tank in the y-dimension (m).
-        length_z: Length of the tank in the z-dimension (m).
+        length_x: Length of the room in the x-dimension (m).
+        length_y: Length of the room in the y-dimension (m).
+        length_z: Length of the room in the z-dimension (m).
     Raises:
-        ValueError: If source or receiver positions are outside the tank dimensions.
+        ValueError: If source or receiver positions are outside the room dimensions.
     """
     # Ensure positions are valid
     if len(source_location) != 3 or len(receiver_location) != 3:
@@ -347,35 +464,18 @@ def validate_geometry(
 
     # Ensure room dimensions are valid
     if length_x <= 0 or length_y <= 0 or length_z <= 0:
-        raise ValueError("Tank dimensions must be positive")
+        raise ValueError("Room dimensions must be positive")
 
-    # Check if source and receiver are within the tank dimensions
+    # Check if source and receiver are within the room dimensions
     if (
         not (0 <= source_location[0] <= length_x)
         or not (0 <= source_location[1] <= length_y)
         or not (0 <= source_location[2] <= length_z)
     ):
-        raise ValueError("Source position is outside the tank dimensions")
+        raise ValueError("Source position is outside the room dimensions")
     if (
         not (0 <= receiver_location[0] <= length_x)
         or not (0 <= receiver_location[1] <= length_y)
         or not (0 <= receiver_location[2] <= length_z)
     ):
-        raise ValueError("Receiver position is outside the tank dimensions")
-
-
-def validate_source_signal(source_signal: npt.NDArray[np.float64]) -> None:
-    """Validate the source signal to ensure it is a 1D or 2D array and not empty.
-
-    Args:
-        source_signal: The original signal (1D or 2D array)
-
-    Raises:
-        ValueError: If the source signal is not a 1D or 2D array or is empty.
-    """
-    if source_signal.ndim > 2:
-        raise ValueError(f"Expected 1D or 2D array, got {source_signal.ndim}D")
-    if source_signal.size == 0:
-        raise ValueError("Input signal cannot be empty")
-    if source_signal.ndim == 0:
-        raise ValueError("Input signal cannot be a scalar")
+        raise ValueError("Receiver position is outside the room dimensions")
