@@ -79,7 +79,7 @@ def main() -> None:
         fig = plot.plot_channel_response(
             frequency=frequency,
             freq_domain_data={
-                "Greens function": {
+                "Green's function": {
                     "data": np.abs(greens_function),
                     "kwargs": {"color": "k"},
                 },
