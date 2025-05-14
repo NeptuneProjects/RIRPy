@@ -29,7 +29,7 @@ lfm_chirp_kwargs = {
 sine_kwargs = {
     "duration": 1.0,
     "sampling_rate": SAMPLING_RATE,  # Sampling rate (Hz)
-    "frequency": 700.0,  # Frequency of the sine wave (Hz)
+    "frequency": 100.0,  # Frequency of the sine wave (Hz)
 }
 model_kwargs = {
     "source_location": np.array([1.0, 1.0, 0.75]),  # Source position (m)
