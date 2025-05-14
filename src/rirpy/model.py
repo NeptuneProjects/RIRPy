@@ -111,9 +111,7 @@ def count_reflections(
 def distances_and_amplitudes(
     source_location: npt.NDArray[np.float64],
     receiver_location: npt.NDArray[np.float64],
-    length_x: float,
-    length_y: float,
-    length_z: float,
+    space_dimensions: npt.NDArray[np.float64],
     sound_speed: float,
     refl_coeff_wall: float,
     refl_coeff_ceil: float,
@@ -125,9 +123,7 @@ def distances_and_amplitudes(
     Args:
         source_location: Vector position of the source (m) [3x1].
         receiver_location: Vector position of the receiver (m) [3x1].
-        length_x: Length of the room in the x-dimension (m).
-        length_y: Length of the room in the y-dimension (m).
-        length_z: Length of the room in the z-dimension (m).
+        space_dimensions: Length of the room in the x, y, and z dimensions (m) [3x1].
         sound_speed: Speed of sound (m/s).
         refl_coeff_wall: Reflection coefficient for the 5 non-surface walls of the room.
         refl_coeff_ceil: Reflection coefficient for the water surface.
@@ -136,6 +132,12 @@ def distances_and_amplitudes(
     Returns:
         Distances and reflection coefficients for source images.
     """
+    # Lengths must be extracted as follows rather than using tuple unpacking
+    # to avoid issues with Numba's type inference
+    length_x = space_dimensions[0]
+    length_y = space_dimensions[1]
+    length_z = space_dimensions[2]
+
     # Compute limits of sum from cutoff time
     cutoff_distance = cutoff_time * sound_speed
     i_max = math.ceil(cutoff_distance / (length_x * 2))
@@ -262,9 +264,7 @@ def free_field_greens_function(
 def greens_function(
     source_location: npt.NDArray[np.float64],
     receiver_location: npt.NDArray[np.float64],
-    length_x: float,
-    length_y: float,
-    length_z: float,
+    space_dimensions: npt.NDArray[np.float64],
     sound_speed: float,
     refl_coeff_wall: float,
     refl_coeff_ceil: float,
@@ -276,9 +276,7 @@ def greens_function(
     Args:
         source_location: Vector position of the source (m) [3x1].
         receiver_location: Vector position of the receiver (m) [3x1].
-        length_x: Length of the room in the x-dimension (m).
-        length_y: Length of the room in the y-dimension (m).
-        length_z: Length of the room in the z-dimension (m).
+        space_dimensions: Length of the room in the x, y, and z dimensions (m) [3x1].
         sound_speed: Speed of sound in the
             medium (m/s).
         refl_coeff_wall: Wall (& floor) reflection coefficient.
@@ -289,6 +287,12 @@ def greens_function(
         greens_func: Green's function for propagation between the source
             and receiver positions as a function of frequency.
     """
+    # Lengths must be extracted as follows rather than using tuple unpacking
+    # to avoid issues with Numba's type inference
+    length_x = space_dimensions[0]
+    length_y = space_dimensions[1]
+    length_z = space_dimensions[2]
+
     # Compute limits of sum from cutoff time
     cutoff_distance = cutoff_time * sound_speed
     l_max = int(np.ceil(cutoff_distance / (length_x * 2)))
@@ -338,9 +342,7 @@ def greens_function(
 def run(
     source_location: Sequence[float],
     receiver_location: Sequence[float],
-    length_x: float,
-    length_y: float,
-    length_z: float,
+    space_dimensions: Sequence[float],
     sound_speed: float,
     refl_coeff_wall: float,
     refl_coeff_ceil: float,
@@ -374,13 +376,12 @@ def run(
     """
     source_location = np.asarray(source_location, dtype=np.float64)
     receiver_location = np.asarray(receiver_location, dtype=np.float64)
+    space = np.asarray(space_dimensions, dtype=np.float64)
     omega = convert_frequency_to_angular(np.asarray(frequency, dtype=np.float64))
     validate_geometry(
         source_location=source_location,
         receiver_location=receiver_location,
-        length_x=length_x,
-        length_y=length_y,
-        length_z=length_z,
+        space_dimensions=space,
     )
 
     numba.set_num_threads(num_threads)
@@ -390,9 +391,7 @@ def run(
         return distances_and_amplitudes(
             source_location=source_location,
             receiver_location=receiver_location,
-            length_x=length_x,
-            length_y=length_y,
-            length_z=length_z,
+            space_dimensions=space,
             sound_speed=sound_speed,
             refl_coeff_wall=refl_coeff_wall,
             refl_coeff_ceil=refl_coeff_ceil,
@@ -402,9 +401,7 @@ def run(
         return greens_function(
             source_location=source_location,
             receiver_location=receiver_location,
-            length_x=length_x,
-            length_y=length_y,
-            length_z=length_z,
+            space_dimensions=space,
             sound_speed=sound_speed,
             refl_coeff_wall=refl_coeff_wall,
             refl_coeff_ceil=refl_coeff_ceil,
@@ -416,9 +413,7 @@ def run(
             distances_and_amplitudes(
                 source_location=source_location,
                 receiver_location=receiver_location,
-                length_x=length_x,
-                length_y=length_y,
-                length_z=length_z,
+                space_dimensions=space,
                 sound_speed=sound_speed,
                 refl_coeff_wall=refl_coeff_wall,
                 refl_coeff_ceil=refl_coeff_ceil,
@@ -427,9 +422,7 @@ def run(
             greens_function(
                 source_location=source_location,
                 receiver_location=receiver_location,
-                length_x=length_x,
-                length_y=length_y,
-                length_z=length_z,
+                space_dimensions=space,
                 sound_speed=sound_speed,
                 refl_coeff_wall=refl_coeff_wall,
                 refl_coeff_ceil=refl_coeff_ceil,
@@ -442,9 +435,7 @@ def run(
 def validate_geometry(
     source_location: npt.NDArray[np.float64],
     receiver_location: npt.NDArray[np.float64],
-    length_x: float,
-    length_y: float,
-    length_z: float,
+    space_dimensions: npt.NDArray[np.float64],
 ) -> None:
     """Validate geometry of model paramterization to ensure source and receiver
     are within the bounded volume.
@@ -458,6 +449,7 @@ def validate_geometry(
     Raises:
         ValueError: If source or receiver positions are outside the room dimensions.
     """
+    length_x, length_y, length_z = tuple(space_dimensions)
     # Ensure positions are valid
     if len(source_location) != 3 or len(receiver_location) != 3:
         raise ValueError("Source and receiver positions must be 3D vectors")
