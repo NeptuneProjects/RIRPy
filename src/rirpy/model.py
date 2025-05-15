@@ -26,13 +26,10 @@ class Environment:
     """Class to hold the environment parameters for the model.
 
     Attributes:
-        source_location: Vector position of the source (m) [3x1].
-        receiver_location: Vector position of the receiver (m) [3x1].
         space_dimensions: Length of the room in the x, y, and z dimensions (m) [3x1].
         sound_speed: Speed of sound in the medium (m/s).
         refl_coeff_wall: Wall (& floor) reflection coefficient.
         refl_coeff_ceil: Ceiling (surface) reflection coefficient.
-        cutoff_time: Cutoff time for reflections (s).
     """
 
     space_dimensions: Iterable[float]
@@ -372,13 +369,7 @@ def run(
     Args:
         source_location: Vector position of the source (m) [3x1].
         receiver_location: Vector position of the receiver (m) [3x1].
-        length_x: Length of the room in the x-dimension (m).
-        length_y: Length of the room in the y-dimension (m).
-        length_z: Length of the room in the z-dimension (m).
-        sound_speed: Speed of sound in the
-            medium (m/s).
-        refl_coeff_wall: Wall (& floor) reflection coefficient.
-        refl_coeff_ceil: Ceiling (surface) reflection coefficient.
+        environment: Environment parameters.
         cutoff_time: Cutoff time for reflections (s).
         frequency: Frequency in Hz (float or array).
         method: Method to use for computation. Options are "image", "greens",
