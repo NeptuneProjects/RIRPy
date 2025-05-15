@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 import functools
 import logging
 import math
@@ -15,7 +15,7 @@ T_GreensResult = npt.NDArray[np.complex128]
 T_ImagesResult = tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]
 
 
-class MethodChoice(str, Enum):
+class MethodChoice(StrEnum):
     BOTH = "both"
     GREENS = "greens"
     IMAGES = "images"
