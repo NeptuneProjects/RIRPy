@@ -1,17 +1,16 @@
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
-import numpy as np
 import numpy.typing as npt
 
 
 def plot_channel_response(
-    frequency: npt.NDArray[np.float64],
+    frequency: npt.ArrayLike,
     freq_domain_data: dict,
-    time: npt.NDArray[np.float64],
+    time: npt.ArrayLike,
     time_domain_data: dict,
-    refl_times: npt.NDArray[np.float64],
+    refl_times: npt.ArrayLike,
     refl_ref_time: float,
-    refl_amplitudes: npt.NDArray[np.float64],
+    refl_amplitudes: npt.ArrayLike,
     figsize: tuple[int, int] = (12, 12),
     tlim: tuple[float, float] | None = None,
 ) -> Figure:

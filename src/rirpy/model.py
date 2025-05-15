@@ -1,10 +1,11 @@
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 import functools
 import logging
 import math
 import time
-from typing import Callable, Iterable, TypeVar
+from typing import TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -32,7 +33,7 @@ class Environment:
         refl_coeff_ceil: Ceiling (surface) reflection coefficient.
     """
 
-    space_dimensions: Iterable[float]
+    space_dimensions: Sequence[float]
     sound_speed: float
     refl_coeff_wall: float
     refl_coeff_ceil: float
@@ -356,11 +357,11 @@ def greens_function(
 
 
 def run(
-    source_location: Iterable[float],
-    receiver_location: Iterable[float],
+    source_location: Sequence[float] | npt.NDArray[np.float64],
+    receiver_location: Sequence[float] | npt.NDArray[np.float64],
     environment: Environment,
     cutoff_time: float,
-    frequency: float | Iterable[float],
+    frequency: float | Sequence[float] | npt.NDArray[np.float64],
     method: MethodChoice | str = MethodChoice.BOTH,
     num_threads: int = 4,
 ) -> T_ImagesResult | T_GreensResult | tuple[T_ImagesResult, T_GreensResult]:
