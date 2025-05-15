@@ -33,10 +33,12 @@ sine_kwargs = {
 model_kwargs = {
     "source_location": np.array([1.0, 1.0, 0.75]),  # Source position (m)
     "receiver_location": np.array([2.0, 2.0, 0.75]),  # Receiver position (m)
-    "space_dimensions": np.array([3.0, 3.0, 1.5]),  # Room dimensions (m)
-    "sound_speed": 343.0,  # Speed of sound (m/s) in air
-    "refl_coeff_wall": 0.9,  # Wall (& floor) reflection coefficient
-    "refl_coeff_ceil": 0.9,  # Ceiling (surface) reflection coefficient
+    "environment": model.Environment(
+        space_dimensions=np.array([3.0, 3.0, 1.5]),  # Room dimensions (m)
+        sound_speed=343.0,  # Speed of sound (m/s) in air
+        refl_coeff_wall=0.9,  # Wall (& floor) reflection coefficient
+        refl_coeff_ceil=0.9,  # Ceiling (surface) reflection coefficient
+    ),
     "cutoff_time": 0.1,  # Cutoff time for reflections (s)
 }
 
@@ -102,7 +104,7 @@ def main() -> None:
                     "kwargs": {"color": "tab:orange"},
                 },
             },
-            refl_times=distances / model_kwargs["sound_speed"],
+            refl_times=distances / model_kwargs["environment"].sound_speed,
             refl_ref_time=ref_time,
             refl_amplitudes=amplitudes,
         )

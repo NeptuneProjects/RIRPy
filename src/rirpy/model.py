@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import Enum
 import functools
 import logging
@@ -18,6 +19,26 @@ class MethodChoice(str, Enum):
     BOTH = "both"
     GREENS = "greens"
     IMAGES = "images"
+
+
+@dataclass
+class Environment:
+    """Class to hold the environment parameters for the model.
+
+    Attributes:
+        source_location: Vector position of the source (m) [3x1].
+        receiver_location: Vector position of the receiver (m) [3x1].
+        space_dimensions: Length of the room in the x, y, and z dimensions (m) [3x1].
+        sound_speed: Speed of sound in the medium (m/s).
+        refl_coeff_wall: Wall (& floor) reflection coefficient.
+        refl_coeff_ceil: Ceiling (surface) reflection coefficient.
+        cutoff_time: Cutoff time for reflections (s).
+    """
+
+    space_dimensions: Iterable[float]
+    sound_speed: float
+    refl_coeff_wall: float
+    refl_coeff_ceil: float
 
 
 def _log_execution_time(
@@ -340,10 +361,7 @@ def greens_function(
 def run(
     source_location: Iterable[float],
     receiver_location: Iterable[float],
-    space_dimensions: Iterable[float],
-    sound_speed: float,
-    refl_coeff_wall: float,
-    refl_coeff_ceil: float,
+    environment: Environment,
     cutoff_time: float,
     frequency: float | Iterable[float],
     method: MethodChoice | str = MethodChoice.BOTH,
@@ -374,59 +392,34 @@ def run(
     """
     source_location = np.asarray(source_location, dtype=np.float64)
     receiver_location = np.asarray(receiver_location, dtype=np.float64)
-    space = np.asarray(space_dimensions, dtype=np.float64)
+    space_dimensions = np.asarray(environment.space_dimensions, dtype=np.float64)
     omega = convert_frequency_to_angular(np.asarray(frequency, dtype=np.float64))
     validate_geometry(
         source_location=source_location,
         receiver_location=receiver_location,
-        space_dimensions=space,
+        space_dimensions=space_dimensions,
     )
 
     numba.set_num_threads(num_threads)
     logging.info(f"Numba is using {numba.get_num_threads()} threads.")
 
+    kwargs = {
+        "source_location": source_location,
+        "receiver_location": receiver_location,
+        "space_dimensions": space_dimensions,
+        "sound_speed": environment.sound_speed,
+        "refl_coeff_wall": environment.refl_coeff_wall,
+        "refl_coeff_ceil": environment.refl_coeff_ceil,
+        "cutoff_time": cutoff_time,
+    }
+
     if method == MethodChoice.IMAGES:
-        return distances_and_amplitudes(
-            source_location=source_location,
-            receiver_location=receiver_location,
-            space_dimensions=space,
-            sound_speed=sound_speed,
-            refl_coeff_wall=refl_coeff_wall,
-            refl_coeff_ceil=refl_coeff_ceil,
-            cutoff_time=cutoff_time,
-        )
+        return distances_and_amplitudes(**kwargs)
     if method == MethodChoice.GREENS:
-        return greens_function(
-            source_location=source_location,
-            receiver_location=receiver_location,
-            space_dimensions=space,
-            sound_speed=sound_speed,
-            refl_coeff_wall=refl_coeff_wall,
-            refl_coeff_ceil=refl_coeff_ceil,
-            cutoff_time=cutoff_time,
-            omega=omega,
-        )
+        return greens_function(**(kwargs | {"omega": omega}))
     if method == MethodChoice.BOTH:
-        return (
-            distances_and_amplitudes(
-                source_location=source_location,
-                receiver_location=receiver_location,
-                space_dimensions=space,
-                sound_speed=sound_speed,
-                refl_coeff_wall=refl_coeff_wall,
-                refl_coeff_ceil=refl_coeff_ceil,
-                cutoff_time=cutoff_time,
-            ),
-            greens_function(
-                source_location=source_location,
-                receiver_location=receiver_location,
-                space_dimensions=space,
-                sound_speed=sound_speed,
-                refl_coeff_wall=refl_coeff_wall,
-                refl_coeff_ceil=refl_coeff_ceil,
-                cutoff_time=cutoff_time,
-                omega=omega,
-            ),
+        return distances_and_amplitudes(**kwargs), greens_function(
+            **(kwargs | {"omega": omega})
         )
     raise ValueError(
         f"Invalid method choice: {method}. Must be one of `MethodChoice.IMAGES`."
