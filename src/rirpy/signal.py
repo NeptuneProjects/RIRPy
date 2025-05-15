@@ -83,7 +83,8 @@ def signal_sine(
 
 
 def simulate_propagation(
-    source_signal: npt.NDArray[np.float64], greens_function: npt.NDArray[np.complex128]
+    source_signal: npt.NDArray[np.float64],
+    greens_function: npt.NDArray[np.complex128 | np.float64],
 ) -> tuple[
     npt.NDArray[np.complex128],
     npt.NDArray[np.float64],
@@ -100,9 +101,9 @@ def simulate_propagation(
     """
     num_samples = source_signal.size
     source_fft = fft.rfft(source_signal, n=num_samples)
-    received_fft = greens_function * source_fft
+    received_fft = greens_function * source_fft  # type: ignore
     received_signal = fft.irfft(received_fft, n=num_samples)
-    return source_fft, received_signal, received_fft
+    return source_fft, received_signal, received_fft  # type: ignore
 
 
 def validate_source_signal(source_signal: npt.NDArray[np.float64]) -> None:

@@ -46,7 +46,9 @@ def main() -> None:
     duration = 1.0
     num_samples = int(duration * SAMPLING_RATE)  # Number of samples
     time = np.arange(0, num_samples) / SAMPLING_RATE  # Time vector (s)
-    frequency = np.fft.rfftfreq(num_samples, 1 / SAMPLING_RATE)  # Frequency vector (Hz)
+    frequency = np.fft.rfftfreq(num_samples, 1 / SAMPLING_RATE).astype(
+        np.float64
+    )  # Frequency vector (Hz)
 
     (distances, amplitudes), greens_function = model.run(
         frequency=frequency, num_threads=NUM_THREADS, method="both", **model_kwargs
@@ -101,11 +103,11 @@ def main() -> None:
                 },
             },
             refl_times=distances / model_kwargs["sound_speed"],
-            refl_amplitudes=amplitudes,
             refl_ref_time=ref_time,
+            refl_amplitudes=amplitudes,
         )
         fig.suptitle(title, fontsize=16, y=0.91)
-        
+
         savepath = Path.cwd() / "example"
         savepath.mkdir(parents=True, exist_ok=True)
         figname = f"{title.lower().replace(' ', '_')}_response.png"

@@ -1,3 +1,4 @@
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
@@ -5,15 +6,15 @@ import numpy.typing as npt
 
 def plot_channel_response(
     frequency: npt.NDArray[np.float64],
-    freq_domain_data: dict[str, dict[npt.NDArray[np.float64], dict]],
+    freq_domain_data: dict,
     time: npt.NDArray[np.float64],
-    time_domain_data: dict[str, npt.NDArray[np.float64]],
+    time_domain_data: dict,
     refl_times: npt.NDArray[np.float64],
+    refl_ref_time: float,
     refl_amplitudes: npt.NDArray[np.float64],
     figsize: tuple[int, int] = (12, 12),
     tlim: tuple[float, float] | None = None,
-    refl_ref_time: float = 0.0,
-) -> plt.Figure:
+) -> Figure:
     if tlim is None:
         tlim = (0, max(time))
 

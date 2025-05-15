@@ -3,7 +3,7 @@ import functools
 import logging
 import math
 import time
-from typing import Callable, Sequence, TypeVar
+from typing import Callable, Iterable, TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -34,7 +34,7 @@ def _log_execution_time(
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
-        def wrapper(*args: any, **kwargs: any) -> T:
+        def wrapper(*args, **kwargs) -> T:
             logging.info(message)
             time_start = time.time()
             result = func(*args, **kwargs)
@@ -49,7 +49,7 @@ def _log_execution_time(
 
 def convert_frequency_to_angular(
     frequency: float | npt.NDArray[np.float64],
-) -> float | np.ndarray:
+) -> float | npt.NDArray[np.float64]:
     """Convert frequency in Hz to angular frequency in radians.
 
     Args:
@@ -267,7 +267,7 @@ def greens_function(
     refl_coeff_wall: float,
     refl_coeff_ceil: float,
     cutoff_time: float,
-    omega: float | npt.NDArray[np.float64],
+    omega: npt.NDArray[np.float64],
 ) -> T_GreensResult:
     """Compute the Green's function for a rectilinear space using method of images.
 
@@ -338,14 +338,14 @@ def greens_function(
 
 
 def run(
-    source_location: Sequence[float],
-    receiver_location: Sequence[float],
-    space_dimensions: Sequence[float],
+    source_location: Iterable[float],
+    receiver_location: Iterable[float],
+    space_dimensions: Iterable[float],
     sound_speed: float,
     refl_coeff_wall: float,
     refl_coeff_ceil: float,
     cutoff_time: float,
-    frequency: float | Sequence[float] | None = None,
+    frequency: float | Iterable[float],
     method: MethodChoice | str = MethodChoice.BOTH,
     num_threads: int = 4,
 ) -> T_ImagesResult | T_GreensResult | tuple[T_ImagesResult, T_GreensResult]:
@@ -428,6 +428,9 @@ def run(
                 omega=omega,
             ),
         )
+    raise ValueError(
+        f"Invalid method choice: {method}. Must be one of `MethodChoice.IMAGES`."
+    )
 
 
 def validate_geometry(
